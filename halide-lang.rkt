@@ -43,54 +43,96 @@
 (define (hld-add i1 i2 [i3 0])
   (+ i1 i2))
 
+(define (hld-add->string i1 i2 [i3 ""])
+  (format "(~a + ~a)" i1 i2))
+
 (define (hld-sub i1 i2 [i3 0])
   (- i1 i2))
+
+(define (hld-sub->string i1 i2 [i3 ""])
+  (format "(~a - ~a)" i1 i2))
 
 (define (hld-mul i1 i2 [i3 0])
   (* i1 i2))
 
+(define (hld-mul->string i1 i2 [i3 ""])
+  (format "(~a * ~a)" i1 i2))
+
 (define (hld-min i1 i2 [i3 0])
   (min i1 i2))
 
+(define (hld-min->string i1 i2 [i3 ""])
+  (format "min(~a, ~a)" i1 i2))
+
 (define (hld-max i1 i2 [i3 0])
   (max i1 i2))
+
+(define (hld-max->string i1 i2 [i3 ""])
+  (format "max(~a, ~a)" i1 i2))
 
 (define (hld-div i1 i2 [i3 0])
   (if (eq? i2 0)
       0
       (euclidean-div i1 i2)))
 
+(define (hld-div->string i1 i2 [i3 ""])
+  (format "(~a / ~a)" i1 i2))
+
 (define (hld-mod i1 i2 [i3 0])
   (if (eq? i2 0)
       0
       (euclidean-mod i1 i2)))
 
+(define (hld-mod->string i1 i2 [i3 ""])
+  (format "(~a % ~a)" i1 i2))
+
 (define (hld-lt i1 i2 [i3 0])
   (< i1 i2))
+
+(define (hld-lt->string i1 i2 [i3 ""])
+  (format "(~a < ~a)" i1 i2))
 
 (define (hld-le i1 i2 [i3 0])
   (<= i1 i2))
 
+(define (hld-le->string i1 i2 [i3 ""])
+  (format "(~a <= ~a)" i1 i2))
+
 (define (hld-gt i1 i2 [i3 0])
   (> i1 i2))
 
+(define (hld-gt->string i1 i2 [i3 ""])
+  (format "(~a > ~a)" i1 i2))
+
 (define (hld-ge i1 i2 [i3 0])
   (>= i1 i2))
+
+(define (hld-ge->string i1 i2 [i3 0])
+  (format "(~a >= ~a)" i1 i2))
 
 (define (hld-eqi i1 i2 [i3 0])
   (if (and (integer? i1) (integer? i2))
       (eq? i1 i2)
       'error))
 
+(define (hld-eq->string i1 i2 [i3 ""])
+  (format "(~a == ~a)" i1 i2))
+
 (define (hld-eqb i1 i2 [i3 #f])
   (if (and (boolean? i1) (boolean? i2))
       (eq? i1 i2)
       'error))
 
+(define (hld-eqb->string i1 i2 [i3 ""])
+  (format "(~a == ~a)" i1 i2))
+
 (define (hld-neqi i1 i2 [i3 0])
   (if (and (integer? i1) (integer? i2))
       (not (eq? i1 i2))
       'error))
+
+(define (hld-neq->string i1 i2 [i3 ""])
+  (format "(~a != ~a)" i1 i2))
 
 (define (hld-neqb i1 i2 [i3 #f])
   (if (and (boolean? i1) (boolean? i2))
@@ -102,6 +144,9 @@
       (if i1 i2 i3)
       'error))
 
+(define (hld-sel->string i1 i2 i3)
+  (format "select(~a, ~a, ~a)" i1 i2 i3))
+
 (define (hld-selb i1 i2 i3)
   (if (and (boolean? i1) (and (boolean? i1) (boolean? i2)))
       (if i1 i2 i3)
@@ -112,38 +157,47 @@
       (and i1 i2)
       'error))
 
+(define (hld-and->string i1 i2 [i3 ""])
+  (format "(~a && ~a)" i1 i2))
+
 (define (hld-or i1 i2 [i3 #f])
   (if (and (boolean? i1) (boolean? i2))
       (or i1 i2)
       'error))
+
+(define (hld-or->string i1 i2 [i3 #f])
+  (format "(~a || ~a)" i1 i2))
 
 (define (hld-not i1 [i2 #f] [i3 #f])
   (if (boolean? i1)
       (not i1)
       'error))
 
-(struct operator (function arity name) #:transparent)
+(define (hld-not->string i1 [i2 ""] [i3 ""])
+  (format "!(~a)" i1))
 
-(define add-operator (operator hld-add 2 "hld-add"))
-(define sub-operator (operator hld-sub 2 "hld-sub"))
-(define mod-operator (operator hld-mod 2 "hld-mod"))
-(define mul-operator (operator hld-mul 2 "hld-mul"))
-(define div-operator (operator hld-div 2 "hld-div"))
-(define min-operator (operator hld-min 2 "hld-min"))
-(define max-operator (operator hld-max 2 "hld-max"))
-(define eqi-operator (operator hld-eqi 2 "hld-eqi"))
-(define neqi-operator (operator hld-neqi 2 "hld-neqi"))
-(define eqb-operator (operator hld-eqb 2 "hld-eqb"))
-(define neqb-operator (operator hld-neqb 2 "hld-neqb"))
-(define lt-operator (operator hld-lt 2 "hld-lt"))
-(define le-operator (operator hld-le 2 "hld-le"))
-(define gt-operator (operator hld-gt 2 "hld-gt"))
-(define ge-operator (operator hld-ge 2 "hld-ge"))
-(define and-operator (operator hld-and 2 "hld-and"))
-(define or-operator (operator hld-or 2 "hld-or"))
-(define not-operator (operator hld-not 1 "hld-not"))
-(define seli-operator (operator hld-seli 3 "hld-seli"))
-(define selb-operator (operator hld-selb 3 "hld-selb"))
+(struct operator (function arity name string-function) #:transparent)
+
+(define add-operator (operator hld-add 2 "hld-add" hld-add->string))
+(define sub-operator (operator hld-sub 2 "hld-sub" hld-sub->string))
+(define mod-operator (operator hld-mod 2 "hld-mod" hld-mod->string))
+(define mul-operator (operator hld-mul 2 "hld-mul" hld-mul->string))
+(define div-operator (operator hld-div 2 "hld-div" hld-div->string))
+(define min-operator (operator hld-min 2 "hld-min" hld-min->string))
+(define max-operator (operator hld-max 2 "hld-max" hld-max->string))
+(define eqi-operator (operator hld-eqi 2 "hld-eqi" hld-eq->string))
+(define neqi-operator (operator hld-neqi 2 "hld-neqi" hld-neq->string))
+(define eqb-operator (operator hld-eqb 2 "hld-eqb" hld-eq->string))
+(define neqb-operator (operator hld-neqb 2 "hld-neqb" hld-neq->string))
+(define lt-operator (operator hld-lt 2 "hld-lt" hld-lt->string))
+(define le-operator (operator hld-le 2 "hld-le" hld-le->string))
+(define gt-operator (operator hld-gt 2 "hld-gt" hld-gt->string))
+(define ge-operator (operator hld-ge 2 "hld-ge" hld-ge->string))
+(define and-operator (operator hld-and 2 "hld-and" hld-and->string))
+(define or-operator (operator hld-or 2 "hld-or" hld-or->string))
+(define not-operator (operator hld-not 1 "hld-not" hld-not->string))
+(define seli-operator (operator hld-seli 3 "hld-seli" hld-sel->string))
+(define selb-operator (operator hld-selb 3 "hld-selb" hld-sel->string))
 
 (define operator-list
   (list add-operator ;; 0
@@ -176,3 +230,5 @@
   (operator-name (get-operator-by-idx idx)))
 (define (get-operator-function-by-idx idx)
   (operator-function (get-operator-by-idx idx)))
+(define (get-operator-string-function-by-idx idx)
+  (operator-string-function (get-operator-by-idx idx)))
