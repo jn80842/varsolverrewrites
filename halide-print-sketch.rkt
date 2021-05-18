@@ -3,7 +3,7 @@
 (require "halide-lang.rkt")
 (require "halide-sketch.rkt")
 
-(provide print-sketch print-topn-sketch)
+(provide print-sketch print-topn-sketch topn-sketch->halide-expr)
 
 (define (print-sketch sk)
   (displayln (string-join (sketch->string sk) "\n")))
@@ -50,10 +50,11 @@
 
 (define (topn-sketch->halide-expr sk root-op-idx)
   (letrec ([f (λ (i)
-              (if (> i (sketch-input-count sk))
+              (if (< i (sketch-input-count sk))
+                  (format "n~a" i)
                   (let ([current-insn (list-ref (sketch-insn-list sk) (- i (sketch-input-count sk)))])
-                    ((get-operator-string-function-by-idx (insn-op-idx current-insn)) (f (insn-arg1-idx current-insn))
-                                                                                      (f (insn-arg2-idx current-insn))
-                                                                                      (f (insn-arg3-idx current-insn))))
-                  (format "n~a" i)))])
+                    ((get-operator-string-function-by-idx (insn-op-idx current-insn))
+                     (f (insn-arg1-idx current-insn))
+                     (f (insn-arg2-idx current-insn))
+                     (f (insn-arg3-idx current-insn))))))])
     ((get-operator-string-function-by-idx root-op-idx) "t0" (f (sketch-retval-idx sk)))))
