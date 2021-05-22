@@ -6,14 +6,15 @@
   (if (= (modulo x y) 0) 0 1))
 
 (define (euclidean-div x y)
-  (cond [(and (negative? x) (negative? y)) (+ (- (quotient (abs x) y)) (div-in-Z-val x y))]
-        [(negative? x) (- (- (quotient (abs x) y)) (div-in-Z-val x y)) ]
-        [(negative? y) (quotient x y)]
+  (cond [(eq? y 0) 0]
+        [(and (negative? x) (negative? y)) (+ (- (quotient (abs x) y)) (div-in-Z-val x y))]
+        [(and (negative? x) (not (eq? y 0))) (- (- (quotient (abs x) y)) (div-in-Z-val x y))]
         [else (quotient x y)]))
 
 (define (euclidean-mod x y)
-  (cond [(and (negative? x) (negative? y)) (- (- (modulo (abs x) (abs y))) (* y (div-in-Z-val x y)))]
-        [(negative? x) (+ (- (modulo (abs x) y)) (* y (div-in-Z-val x y)))]
+  (cond [(eq? y 0) 0]
+        [(and (negative? x) (negative? y)) (- (- (modulo (abs x) (abs y))) (* y (div-in-Z-val x y)))]
+        [(and (not (eq? y 0)) (negative? x)) (+ (- (modulo (abs x) y)) (* y (div-in-Z-val x y)))]
         [(negative? y) (modulo x (abs y))]
         [else (modulo x y)]))
 ;
@@ -71,17 +72,13 @@
   (format "max(~a, ~a)" i1 i2))
 
 (define (hld-div i1 i2 [i3 0])
-  (if (eq? i2 0)
-      0
-      (euclidean-div i1 i2)))
+  (euclidean-div i1 i2))
 
 (define (hld-div->string i1 i2 [i3 ""])
   (format "(~a / ~a)" i1 i2))
 
 (define (hld-mod i1 i2 [i3 0])
-  (if (eq? i2 0)
-      0
-      (euclidean-mod i1 i2)))
+  (euclidean-mod i1 i2))
 
 (define (hld-mod->string i1 i2 [i3 ""])
   (format "(~a % ~a)" i1 i2))
