@@ -3,6 +3,7 @@
 (require "halide-lang.rkt")
 (require "halide-sketch.rkt")
 (require "halide-print-sketch.rkt")
+(require "halide-parser.rkt")
 
 ;; assume LHS is a function that takes the same inputs as the RHS sketch
 (define (synthesize-rewrite LHS sk inputs)
@@ -47,3 +48,34 @@
     (if (unsat? model)
         (displayln "Could not find equivalent RHS")
         (displayln (print-topn-sketch (evaluate sk model) (evaluate op-idx model))))))
+
+(define (pull-out-target-var var-list target-idx)
+  (let ([size (length var-list)])
+    (append (list (list-ref var-list target-idx)) (take var-list target-idx) (drop var-list (add1 target-idx)))))
+
+(define (insert-target-var nv-list tarvar target-idx)
+  (append (take nv-list target-idx) (list tarvar) (drop nv-list target-idx)))
+
+;; assumptions:
+;; LHS contains 3 variables
+(define (synthesize-3var-rewrite LHS-string tar-idx)
+  (let* ([LHS-func (#%top-interaction eval (call-with-input-string (halide->rktlang LHS-string) read))]
+         [op-count (halide->countops LHS-string)]
+         [sk (get-symbolic-sketch 2 op-count)]
+         [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
+                                                                     (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
+    (begin
+      (clear-asserts!)
+      (define-symbolic* tarvar integer?)
+      (define-symbolic* n0 integer?)
+      (define-symbolic* n1 integer?)
+      (define-symbolic* root-op integer?)
+      (let* ([evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar (list n0 n1))]
+             [evaled-LHS (apply LHS-func (insert-target-var (list n0 n1) tarvar tar-idx))]
+             [model (time (synthesize #:forall (list tarvar n0 n1)
+                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS))))])
+        (if (unsat? model)
+            (displayln (format "Could not find equivalent RHS for ~a" renamed-LHS))
+            (displayln (format "rewrite(~a, ~a);" renamed-LHS
+                               (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
+            )))
