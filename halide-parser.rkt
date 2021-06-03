@@ -168,3 +168,12 @@
 
 (define (halide->countops s)
   (evaluate-halide-parser halide->countops-parser s))
+
+#;(with-input-from-file "expr.txt"
+  (λ ()
+    (with-output-to-file "file.txt"
+      (λ ()
+        (for ([line (in-lines)])
+         ; (println (halide->rktlang line))
+          (display (format "(cons \"~a\" ~a)\n" line (halide->rktlang line)))
+          )))))

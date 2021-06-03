@@ -58,9 +58,8 @@
 
 ;; assumptions:
 ;; LHS contains 3 variables
-(define (synthesize-3var-rewrite LHS-string tar-idx)
-  (let* ([LHS-func (eval (call-with-input-string (halide->rktlang LHS-string) read))]
-         [op-count (halide->countops LHS-string)]
+(define (synthesize-3var-rewrite LHS-string LHS-func tar-idx)
+  (let* ([op-count (halide->countops LHS-string)]
          [sk (get-symbolic-sketch 2 op-count)]
          [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
                                                                      (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
@@ -72,9 +71,11 @@
       (define-symbolic* root-op integer?)
       (let* ([evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar (list n0 n1))]
              [evaled-LHS (apply LHS-func (insert-target-var (list n0 n1) tarvar tar-idx))]
-             [model (time (synthesize #:forall (list tarvar n0 n1)
-                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS))))])
-        (if (unsat? model)
+             [model (time (with-handlers ([(λ (e) #t)
+                                           (λ (e) (displayln (format "Timeout in search for RHS for ~a" renamed-LHS)))])
+                            (synthesize #:forall (list tarvar n0 n1)
+                                        #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+        (if (or (unsat? model) (void? model))
             (displayln (format "Could not find equivalent RHS for ~a" renamed-LHS))
             (displayln (format "rewrite(~a, ~a);" renamed-LHS
                                (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
@@ -82,110 +83,110 @@
 
 
 (define patts (list
-"((x/y)*z)"
-"((x/y)/z)"
-"(x/(y/z))"
-"((x*y)*z)"
-"((x/y)*z)"
-"(x + (y*z))"
-"((x/y) + z)"
-"((x - y)/z)"
-"min(x*y, z)"
-"((x*y) + z)"
-"((x + y)/z)"
-"((x % y)*z)"
-"((x/y) < z)"
-"(x*(y + z))"
-"((x + y)*z)"
-"((x - y)*z)"
-"(x - (y/z))"
-"((x*y) - z)"
-"(x + (y/z))"
-"(x - (y*z))"
-"((x*y) + z)"
-"((x/y) - z)"
-"(x + (y*z))"
-"((x/y) + z)"
-"min(x, y/z)"
-"max(x*y, z)"
-"min(x/y, z)"
-"max(x, y/z)"
-"max(x/y, z)"
-"(x < (y/z))"
-"min(x, y*z)"
-"(x < (y*z))"
-"((x + y)/z)"
-"max(x, y*z)"
-"(x/(y + z))"
-"((x/y) % z)"
-"(x % (y/z))"
-"((x + y)*z)"
-"((x*y) < z)"
-"(x*(y - z))"
-"(x <= (y/z))"
-"(x <= (y*z))"
-"(x <= (y/z))"
-"(x <= (y*z))"
-"!((x/y) < z)"
-"((x/y) <= z)"
-"((x/y) >= z)"
-"((x*y) >= z)"
-"((x*y) <= z)"
-"(x >= (y*z))"
-"!(x < (y/z))"
-"((x + y) + z)"
-"(x - (y % z))"
-"((x + y) % z)"
-"min(x, y + z)"
-"(x + (y + z))"
-"((x + y) < z)"
-"max(x + y, z)"
-"((x + y) - z)"
-"(x < (y % z))"
-"(x + (y - z))"
-"((x + y) < z)"
-"!(x <= (y/z))"
-"(x < (y + z))"
-"((x % y) < z)"
-"((x - y) + z)"
-"(x - (y - z))"
-"max(x, y + z)"
-"min(x, y - z)"
-"max(x - y, z)"
-"min(x - y, z)"
-"min(x + y, z)"
-"((x - y) - z)"
-"(x - (y + z))"
-"(x + (y + z))"
-"(max(x, y)*z)"
-"(min(x, y)*z)"
-"(min(x, y)/z)"
-"((x + y) + z)"
-"(((x/y)/z)*z)"
-"min((x*y), z)"
-"min(x/y, z/y)"
-"min(x*y, z*y)"
-"((x % y) + z)"
-"(x % (y + z))"
-"(max(x, y)/z)"
-"min((x), y/z)"
-"max(x*y, z*y)"
-"(((x/y)/y)*z)"
-"max(x, y - z)"
-"((x % y) - z)"
-"((x + y) + z)"
-"max(x/y, z/y)"
-"((x + y) <= z)"
-"(x <= (y + z))"
-"((x - y) <= z)"
-"((x + y) <= z)"
-"(x || (y < z))"
-"!(x < (y + z))"
-"!((x + y) < z)"
+(cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))
+(cons "((x/y)/z)" (λ (x y z) (hld-div (hld-div x y) z)))
+(cons "(x/(y/z))" (λ (x y z) (hld-div x (hld-div y z))))
+(cons "((x*y)*z)" (λ (x y z) (hld-mul (hld-mul x y) z)))
+(cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))
+(cons "(x + (y*z))" (λ (x y z) (hld-add x (hld-mul y z))))
+(cons "((x/y) + z)" (λ (x y z) (hld-add (hld-div x y) z)))
+(cons "((x - y)/z)" (λ (x y z) (hld-div (hld-sub x y) z)))
+(cons "min(x*y, z)" (λ (x y z) (min (hld-mul x y) z)))
+(cons "((x*y) + z)" (λ (x y z) (hld-add (hld-mul x y) z)))
+(cons "((x + y)/z)" (λ (x y z) (hld-div (hld-add x y) z)))
+(cons "((x % y)*z)" (λ (x y z) (hld-mul (hld-mod x y) z)))
+(cons "((x/y) < z)" (λ (x y z) (hld-lt (hld-div x y) z)))
+(cons "(x*(y + z))" (λ (x y z) (hld-mul x (hld-add y z))))
+(cons "((x + y)*z)" (λ (x y z) (hld-mul (hld-add x y) z)))
+(cons "((x - y)*z)" (λ (x y z) (hld-mul (hld-sub x y) z)))
+(cons "(x - (y/z))" (λ (x y z) (hld-sub x (hld-div y z))))
+(cons "((x*y) - z)" (λ (x y z) (hld-sub (hld-mul x y) z)))
+(cons "(x + (y/z))" (λ (x y z) (hld-add x (hld-div y z))))
+(cons "(x - (y*z))" (λ (x y z) (hld-sub x (hld-mul y z))))
+(cons "((x*y) + z)" (λ (x y z) (hld-add (hld-mul x y) z)))
+(cons "((x/y) - z)" (λ (x y z) (hld-sub (hld-div x y) z)))
+(cons "(x + (y*z))" (λ (x y z) (hld-add x (hld-mul y z))))
+(cons "((x/y) + z)" (λ (x y z) (hld-add (hld-div x y) z)))
+(cons "min(x, y/z)" (λ (x y z) (min x (hld-div y z))))
+(cons "max(x*y, z)" (λ (x y z) (max (hld-mul x y) z)))
+(cons "min(x/y, z)" (λ (x y z) (min (hld-div x y) z)))
+(cons "max(x, y/z)" (λ (x y z) (max x (hld-div y z))))
+(cons "max(x/y, z)" (λ (x y z) (max (hld-div x y) z)))
+(cons "(x < (y/z))" (λ (x y z) (hld-lt x (hld-div y z))))
+(cons "min(x, y*z)" (λ (x y z) (min x (hld-mul y z))))
+(cons "(x < (y*z))" (λ (x y z) (hld-lt x (hld-mul y z))))
+(cons "((x + y)/z)" (λ (x y z) (hld-div (hld-add x y) z)))
+(cons "max(x, y*z)" (λ (x y z) (max x (hld-mul y z))))
+(cons "(x/(y + z))" (λ (x y z) (hld-div x (hld-add y z))))
+(cons "((x/y) % z)" (λ (x y z) (hld-mod (hld-div x y) z)))
+(cons "(x % (y/z))" (λ (x y z) (hld-mod x (hld-div y z))))
+(cons "((x + y)*z)" (λ (x y z) (hld-mul (hld-add x y) z)))
+(cons "((x*y) < z)" (λ (x y z) (hld-lt (hld-mul x y) z)))
+(cons "(x*(y - z))" (λ (x y z) (hld-mul x (hld-sub y z))))
+(cons "(x <= (y/z))" (λ (x y z) (hld-le x (hld-div y z))))
+(cons "(x <= (y*z))" (λ (x y z) (hld-le x (hld-mul y z))))
+(cons "(x <= (y/z))" (λ (x y z) (hld-le x (hld-div y z))))
+(cons "(x <= (y*z))" (λ (x y z) (hld-le x (hld-mul y z))))
+(cons "!((x/y) < z)" (λ (x y z) (hld-not (hld-lt (hld-div x y) z))))
+(cons "((x/y) <= z)" (λ (x y z) (hld-le (hld-div x y) z)))
+(cons "((x/y) >= z)" (λ (x y z) (hld-ge (hld-div x y) z)))
+(cons "((x*y) >= z)" (λ (x y z) (hld-ge (hld-mul x y) z)))
+(cons "((x*y) <= z)" (λ (x y z) (hld-le (hld-mul x y) z)))
+(cons "(x >= (y*z))" (λ (x y z) (hld-ge x (hld-mul y z))))
+(cons "!(x < (y/z))" (λ (x y z) (hld-not (hld-lt x (hld-div y z)))))
+(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
+(cons "(x - (y % z))" (λ (x y z) (hld-sub x (hld-mod y z))))
+(cons "((x + y) % z)" (λ (x y z) (hld-mod (hld-add x y) z)))
+(cons "min(x, y + z)" (λ (x y z) (min x (hld-add y z))))
+(cons "(x + (y + z))" (λ (x y z) (hld-add x (hld-add y z))))
+(cons "((x + y) < z)" (λ (x y z) (hld-lt (hld-add x y) z)))
+(cons "max(x + y, z)" (λ (x y z) (max (hld-add x y) z)))
+(cons "((x + y) - z)" (λ (x y z) (hld-sub (hld-add x y) z)))
+(cons "(x < (y % z))" (λ (x y z) (hld-lt x (hld-mod y z))))
+(cons "(x + (y - z))" (λ (x y z) (hld-add x (hld-sub y z))))
+(cons "((x + y) < z)" (λ (x y z) (hld-lt (hld-add x y) z)))
+(cons "!(x <= (y/z))" (λ (x y z) (hld-not (hld-le x (hld-div y z)))))
+(cons "(x < (y + z))" (λ (x y z) (hld-lt x (hld-add y z))))
+(cons "((x % y) < z)" (λ (x y z) (hld-lt (hld-mod x y) z)))
+(cons "((x - y) + z)" (λ (x y z) (hld-add (hld-sub x y) z)))
+(cons "(x - (y - z))" (λ (x y z) (hld-sub x (hld-sub y z))))
+(cons "max(x, y + z)" (λ (x y z) (max x (hld-add y z))))
+(cons "min(x, y - z)" (λ (x y z) (min x (hld-sub y z))))
+(cons "max(x - y, z)" (λ (x y z) (max (hld-sub x y) z)))
+(cons "min(x - y, z)" (λ (x y z) (min (hld-sub x y) z)))
+(cons "min(x + y, z)" (λ (x y z) (min (hld-add x y) z)))
+(cons "((x - y) - z)" (λ (x y z) (hld-sub (hld-sub x y) z)))
+(cons "(x - (y + z))" (λ (x y z) (hld-sub x (hld-add y z))))
+(cons "(x + (y + z))" (λ (x y z) (hld-add x (hld-add y z))))
+(cons "(max(x, y)*z)" (λ (x y z) (hld-mul (max x y) z)))
+(cons "(min(x, y)*z)" (λ (x y z) (hld-mul (min x y) z)))
+(cons "(min(x, y)/z)" (λ (x y z) (hld-div (min x y) z)))
+(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
+(cons "(((x/y)/z)*z)" (λ (x y z) (hld-mul (hld-div (hld-div x y) z) z)))
+(cons "min((x*y), z)" (λ (x y z) (min (hld-mul x y) z)))
+(cons "min(x/y, z/y)" (λ (x y z) (min (hld-div x y) (hld-div z y))))
+(cons "min(x*y, z*y)" (λ (x y z) (min (hld-mul x y) (hld-mul z y))))
+(cons "((x % y) + z)" (λ (x y z) (hld-add (hld-mod x y) z)))
+(cons "(x % (y + z))" (λ (x y z) (hld-mod x (hld-add y z))))
+(cons "(max(x, y)/z)" (λ (x y z) (hld-div (max x y) z)))
+(cons "min((x), y/z)" (λ (x y z) (min x (hld-div y z))))
+(cons "max(x*y, z*y)" (λ (x y z) (max (hld-mul x y) (hld-mul z y))))
+(cons "(((x/y)/y)*z)" (λ (x y z) (hld-mul (hld-div (hld-div x y) y) z)))
+(cons "max(x, y - z)" (λ (x y z) (max x (hld-sub y z))))
+(cons "((x % y) - z)" (λ (x y z) (hld-sub (hld-mod x y) z)))
+(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
+(cons "max(x/y, z/y)" (λ (x y z) (max (hld-div x y) (hld-div z y))))
+(cons "((x + y) <= z)" (λ (x y z) (hld-le (hld-add x y) z)))
+(cons "(x <= (y + z))" (λ (x y z) (hld-le x (hld-add y z))))
+(cons "((x - y) <= z)" (λ (x y z) (hld-le (hld-sub x y) z)))
+(cons "((x + y) <= z)" (λ (x y z) (hld-le (hld-add x y) z)))
+(cons "(x || (y < z))" (λ (x y z) (hld-or x (hld-lt y z))))
+(cons "!(x < (y + z))" (λ (x y z) (hld-not (hld-lt x (hld-add y z)))))
+(cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
 ))
 
-(for ([lhs (take patts 2)])
+(for ([lhs patts])
   (begin
-    (synthesize-3var-rewrite lhs 0)
-    (synthesize-3var-rewrite lhs 1)
-    (synthesize-3var-rewrite lhs 2)))
+    (synthesize-3var-rewrite (car lhs) (cdr lhs) 0)
+    (synthesize-3var-rewrite (car lhs) (cdr lhs) 1)
+    (synthesize-3var-rewrite (car lhs) (cdr lhs) 2)))
