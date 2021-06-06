@@ -27,7 +27,7 @@
     (for/list ([i (range (length (sketch-insn-list sk)))])
       (let ([current-insn (list-ref (sketch-insn-list sk) i)])
         (format "  (define R~a (~a ~a))" (+ input-offset i)
-                (get-operator-name-by-idx (insn-op-idx current-insn)) (insn-args->string current-insn))))))
+                (get-operator-name-by-idx (sketch-operator-list sk) (insn-op-idx current-insn)) (insn-args->string current-insn))))))
 
 (define (insn-args->string i)
   (case (get-operator-arity-by-idx (insn-op-idx i))
@@ -45,7 +45,7 @@
             (list "  (define RT t0)")
             (inputs->string-list sk)
             (insns->string-list sk)
-            (list (format "  (define R~a (~a RT R~a))" root-node-idx (get-operator-name-by-idx op-idx) (sketch-retval-idx sk)))
+            (list (format "  (define R~a (~a RT R~a))" root-node-idx (get-operator-name-by-idx (sketch-operator-list sk) op-idx) (sketch-retval-idx sk)))
             (list (format "  R~a)" root-node-idx)))))
 
 (define (topn-sketch->halide-expr sk root-op-idx)
@@ -53,8 +53,8 @@
               (if (< i (sketch-input-count sk))
                   (format "n~a" i)
                   (let ([current-insn (list-ref (sketch-insn-list sk) (- i (sketch-input-count sk)))])
-                    ((get-operator-string-function-by-idx (insn-op-idx current-insn))
+                    ((get-operator-string-function-by-idx (sketch-operator-list sk) (insn-op-idx current-insn))
                      (f (insn-arg1-idx current-insn))
                      (f (insn-arg2-idx current-insn))
                      (f (insn-arg3-idx current-insn))))))])
-    ((get-operator-string-function-by-idx root-op-idx) "t0" (f (sketch-retval-idx sk)))))
+    ((get-operator-string-function-by-idx (sketch-operator-list sk) root-op-idx) "t0" (f (sketch-retval-idx sk)))))

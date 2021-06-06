@@ -219,13 +219,36 @@
         selb-operator ;; 19
         ))
 
-(define (get-operator-by-idx idx)
+(define cheap-operator-list
+  (list add-operator ;; 0
+        sub-operator ;; 1
+        mul-operator ;; 2
+      ;  div-operator ;; 3
+      ;  mod-operator ;; 4
+        min-operator ;; 5
+        max-operator ;; 6
+        eqi-operator ;; 7
+        eqb-operator ;; 8
+        neqi-operator ;; 9
+        neqb-operator ;; 10
+        lt-operator ;; 11
+        le-operator ;; 12
+        gt-operator ;; 13
+        ge-operator ;; 14
+        and-operator ;; 15
+        or-operator ;; 16
+        not-operator ;; 17
+     ;   seli-operator ;; 18
+     ;   selb-operator ;; 19
+        ))
+
+(define (get-operator-by-idx operator-list idx)
   (list-ref operator-list idx))
-(define (get-operator-arity-by-idx idx)
-  (operator-arity (get-operator-by-idx idx)))
-(define (get-operator-name-by-idx idx)
-  (operator-name (get-operator-by-idx idx)))
-(define (get-operator-function-by-idx idx)
-  (operator-function (get-operator-by-idx idx)))
-(define (get-operator-string-function-by-idx idx)
-  (operator-string-function (get-operator-by-idx idx)))
+(define (get-operator-arity-by-idx operator-list idx)
+  (operator-arity (get-operator-by-idx operator-list idx)))
+(define (get-operator-name-by-idx operator-list idx)
+  (operator-name (get-operator-by-idx operator-list idx)))
+(define (get-operator-function-by-idx operator-list idx)
+  (operator-function (get-operator-by-idx operator-list idx)))
+(define (get-operator-string-function-by-idx operator-list idx)
+  (operator-string-function (get-operator-by-idx operator-list idx)))

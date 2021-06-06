@@ -19,7 +19,7 @@
   (λ (i1 i2 i3)
     (hld-add (hld-mul i1 i2) (hld-mul i1 i3))))
 
-(define sk1 (get-symbolic-sketch 3 3))
+(define sk1 (get-symbolic-sketch operator-list 3 3))
 
 (define-symbolic* i1 integer?)
 (define-symbolic* i2 integer?)
@@ -36,7 +36,7 @@
 
 (define-symbolic* sym-op-idx integer?)
 
-(define sk2 (get-symbolic-sketch 2 2))
+(define sk2 (get-symbolic-sketch operator-list 2 2))
 
 (define-symbolic* sym-tarvar integer?)
 
@@ -60,7 +60,7 @@
 ;; LHS contains 3 variables
 (define (synthesize-3var-rewrite LHS-string LHS-func tar-idx)
   (let* ([op-count (halide->countops LHS-string)]
-         [sk (get-symbolic-sketch 2 op-count)]
+         [sk (get-symbolic-sketch operator-list 2 op-count)]
          [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
                                                                      (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
     (begin
@@ -185,7 +185,7 @@
 (cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
 ))
 
-(for ([lhs patts])
+(for ([lhs (list (list-ref patts 20))])
   (begin
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 0)
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 1)
