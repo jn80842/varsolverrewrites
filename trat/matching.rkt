@@ -1,6 +1,6 @@
 #lang racket
 
-(provide sigma-term match)
+(provide sigma-term match varsolver-match)
 
 (struct vname (str int) #:transparent)
 
@@ -47,7 +47,46 @@
                       (cond [(and (string? (car curr-eq))
                                   (indom (car curr-eq) sub)
                                   (eq? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
-                            [(and (string? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                            [(and (string? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set
+                                                                                                    (hash-set sub (car curr-eq)
+                                                                                                              (cdr curr-eq)))]
+                            [(and (sigma-term? (car curr-eq))
+                                  (sigma-term? (cdr curr-eq))
+                                  (eq? (sigma-term-symbol (car curr-eq))
+                                       (sigma-term-symbol (cdr curr-eq)))) (matches (append (map cons (sigma-term-term-list (car curr-eq))
+                                                                                                 (sigma-term-term-list (cdr curr-eq))) ret-eq-set) sub)]
+                            [else 'fail]))))])
+    (matches (list (cons patt obj)) (make-immutable-hash '()))))
+
+(define (is-tvar-matching? v)
+  (string-prefix? v "t"))
+(define (is-non-tvar-matching? v)
+  (string-prefix? v "n"))
+(define (contains-target-variable? term tvar)
+  (letrec ([f (λ (term)
+                (if (string? term)
+                    (eq? term tvar)
+                    (ormap f (sigma-term-term-list term))))])
+    (f term)))
+;; matching for variable solver
+;; assume all pattern variables are either target-variable matching or non-target-variable matching
+;; tvar is the target variable that occurs in the obj/input expr
+(define (varsolver-match patt obj tvar)
+  (letrec ([matches (λ (eq-set sub)
+                      (if (empty? eq-set) sub
+                          (let ([curr-eq (first eq-set)]
+                                [ret-eq-set (cdr eq-set)])
+                      (cond [(and (string? (car curr-eq))
+                                  (indom (car curr-eq) sub)
+                                  (eq? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
+                            [(and (string? (car curr-eq))
+                                  (not (indom (car curr-eq) sub))
+                                  (is-tvar-matching? (car curr-eq))
+                                  (contains-target-variable? (cdr curr-eq) tvar)) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                            [(and (string? (car curr-eq))
+                                  (not (indom (car curr-eq) sub))
+                                  (is-non-tvar-matching? (car curr-eq))
+                                  (not (contains-target-variable? (cdr curr-eq) tvar))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
                                   (eq? (sigma-term-symbol (car curr-eq))
