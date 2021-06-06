@@ -42,67 +42,89 @@
 ;        result_bool = select(op == 16, arg1_bool, result_bool);
 
 (define (hld-add i1 i2 [i3 0])
-  (+ i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (+ i1 i2)
+      'error))
 
 (define (hld-add->string i1 i2 [i3 ""])
   (format "(~a + ~a)" i1 i2))
 
 (define (hld-sub i1 i2 [i3 0])
-  (- i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (- i1 i2)
+      'error))
 
 (define (hld-sub->string i1 i2 [i3 ""])
   (format "(~a - ~a)" i1 i2))
 
 (define (hld-mul i1 i2 [i3 0])
-  (* i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (* i1 i2)
+      'error))
 
 (define (hld-mul->string i1 i2 [i3 ""])
   (format "(~a * ~a)" i1 i2))
 
 (define (hld-min i1 i2 [i3 0])
-  (min i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (min i1 i2)
+      'error))
 
 (define (hld-min->string i1 i2 [i3 ""])
   (format "min(~a, ~a)" i1 i2))
 
 (define (hld-max i1 i2 [i3 0])
-  (max i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (max i1 i2)
+      'error))
 
 (define (hld-max->string i1 i2 [i3 ""])
   (format "max(~a, ~a)" i1 i2))
 
 (define (hld-div i1 i2 [i3 0])
-  (euclidean-div i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (euclidean-div i1 i2)
+      'error))
 
 (define (hld-div->string i1 i2 [i3 ""])
   (format "(~a / ~a)" i1 i2))
 
 (define (hld-mod i1 i2 [i3 0])
-  (euclidean-mod i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (euclidean-mod i1 i2)
+      'error))
 
 (define (hld-mod->string i1 i2 [i3 ""])
   (format "(~a % ~a)" i1 i2))
 
 (define (hld-lt i1 i2 [i3 0])
-  (< i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (< i1 i2)
+      'error))
 
 (define (hld-lt->string i1 i2 [i3 ""])
   (format "(~a < ~a)" i1 i2))
 
 (define (hld-le i1 i2 [i3 0])
-  (<= i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (<= i1 i2)
+      'error))
 
 (define (hld-le->string i1 i2 [i3 ""])
   (format "(~a <= ~a)" i1 i2))
 
 (define (hld-gt i1 i2 [i3 0])
-  (> i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (> i1 i2)
+      'error))
 
 (define (hld-gt->string i1 i2 [i3 ""])
   (format "(~a > ~a)" i1 i2))
 
 (define (hld-ge i1 i2 [i3 0])
-  (>= i1 i2))
+  (if (and (integer? i1) (integer? i2))
+      (>= i1 i2)
+      'error))
 
 (define (hld-ge->string i1 i2 [i3 0])
   (format "(~a >= ~a)" i1 i2))
