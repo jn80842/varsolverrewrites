@@ -63,23 +63,25 @@
          [sk (get-symbolic-sketch operator-list 2 op-count)]
          [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
                                                                      (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
-    (begin
-      (clear-asserts!)
-      (define-symbolic* tarvar integer?)
-      (define-symbolic* n0 integer?)
-      (define-symbolic* n1 integer?)
-      (define-symbolic* root-op integer?)
-      (let* ([evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar (list n0 n1))]
-             [evaled-LHS (apply LHS-func (insert-target-var (list n0 n1) tarvar tar-idx))]
-             [model (time (with-handlers ([(λ (e) #t)
-                                           (λ (e) (displayln (format "Timeout in search for RHS for ~a" renamed-LHS)))])
-                            (synthesize #:forall (list tarvar n0 n1)
-                                        #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
-        (if (or (unsat? model) (void? model))
-            (displayln (format "Could not find equivalent RHS for ~a" renamed-LHS))
-            (displayln (format "rewrite(~a, ~a);" renamed-LHS
-                               (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
-            )))
+    (if (halide-expr-in-solved-form? renamed-LHS)
+        (displayln (format "Candidate LHS already in solved form: ~a" renamed-LHS))
+        (begin
+          (clear-asserts!)
+          (define-symbolic* tarvar integer?)
+          (define-symbolic* n0 integer?)
+          (define-symbolic* n1 integer?)
+          (define-symbolic* root-op integer?)
+          (let* ([evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar (list n0 n1))]
+                 [evaled-LHS (apply LHS-func (insert-target-var (list n0 n1) tarvar tar-idx))]
+                 [model (time (with-handlers ([(λ (e) #t)
+                                               (λ (e) (displayln (format "Timeout in search for RHS for ~a" renamed-LHS)))])
+                                (synthesize #:forall (list tarvar n0 n1)
+                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+            (if (or (unsat? model) (void? model))
+                (displayln (format "Could not find equivalent RHS for ~a" renamed-LHS))
+                (displayln (format "rewrite(~a, ~a);" renamed-LHS
+                                   (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
+          ))))
 
 
 (define patts (list
@@ -185,7 +187,7 @@
 (cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
 ))
 
-(for ([lhs (list (list-ref patts 20))])
+(for ([lhs (list (list-ref patts 5))])
   (begin
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 0)
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 1)

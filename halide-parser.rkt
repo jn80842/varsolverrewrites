@@ -7,7 +7,70 @@
 
 (provide halide->rktlang
          halide->renamevars
-         halide->countops)
+         halide->countops
+         halide-expr-in-solved-form?)
+
+(define halide->solvedform-parser
+  (parser
+   (start start)
+   (end newline EOF)
+   (tokens value-tokens op-tokens)
+   (error (lambda (a b c) (void)))
+
+   (precs (left OR AND)
+          (right EQ)
+          (left < > GE LE)
+          (left - +)
+          (left * / %)
+          (left NEG)
+          (left !))
+
+   (grammar
+    (start [() #f]
+           [(targetvar binop nt-exp) #t]
+           [(OP targetvar binop nt-exp CP) #t]
+           [(binop targetvar nt-exp) #t]
+           [(OP binop targetvar nt-exp CP) #t]
+           [(nt-exp) #t])
+    (targetvar [(TVAR) #t])
+    (binop [(EQ) #t]
+           [(MAX) #t]
+           [(MIN) #t]
+           [(AND) #t]
+           [(OR) #t]
+           [(+) #t]
+           [(-) #t]
+           [(*) #t]
+           [(/) #t]
+           [(%) #t]
+           [(<) #t]
+           [(>) #t]
+           [(GE) #t]
+           [(LE) #t])
+    (nt-exp [(NUM) $1]
+         [(NTVAR) $1]
+         [(TRUE) "true"]
+         [(FALSE) "false"]
+         [(UINT1) "true"]
+         [(UINT0) "false"]
+         [(nt-exp EQ nt-exp) (format "(eq? ~a ~a)" $1 $3)]
+         [(MAX OP nt-exp COMMA nt-exp CP) (format "(max ~a ~a)" $3 $5)]
+         [(MIN OP nt-exp COMMA nt-exp CP) (format "(min ~a ~a)" $3 $5)]
+         [(SELECT OP nt-exp COMMA nt-exp COMMA nt-exp CP) (format "(if ~a ~a ~a)" $3 $5 $7)]
+         [(nt-exp AND nt-exp) (format "(hld-and ~a ~a)" $1 $3)]
+         [(nt-exp OR nt-exp) (format "(hld-or ~a ~a)" $1 $3)]
+         [(nt-exp + nt-exp) (format "(hld-add ~a ~a)"$1 $3)]
+         [(nt-exp - nt-exp) (format "(hld-sub ~a ~a)" $1 $3)]
+         [(nt-exp * nt-exp) (format "(hld-mul ~a ~a)" $1 $3)]
+         [(nt-exp / nt-exp) (format "(hld-div ~a ~a)" $1 $3)]
+         [(nt-exp < nt-exp) (format "(hld-lt ~a ~a)" $1 $3)]
+         [(nt-exp > nt-exp) (format "(hld-gt ~a ~a)" $1 $3)]
+         [(nt-exp % nt-exp) (format "(hld-mod ~a ~a)" $1 $3)]
+         [(nt-exp GE nt-exp) (format "(hld-ge ~a ~a)" $1 $3)]
+         [(nt-exp LE nt-exp) (format "(hld-le ~a ~a)" $1 $3)]
+         [(! OP nt-exp CP) (format "(hld-not ~a)" $3)]
+         [(OP nt-exp CP) $2]
+         [(LII nt-exp) $2]))))
 
 (define halide->rktlang-parser
   (parser
@@ -35,6 +98,8 @@
     
     (exp [(NUM) $1]
          [(VAR) $1]
+         [(TVAR) $1]
+         [(NTVAR) $1]
          [(TRUE) "true"]
          [(FALSE) "false"]
          [(UINT1) "true"]
@@ -168,6 +233,11 @@
 
 (define (halide->countops s)
   (evaluate-halide-parser halide->countops-parser s))
+
+(define (halide-expr-in-solved-form? s)
+  (with-handlers ([(λ (e) #t)
+                   (λ (e) #f)])
+    (evaluate-halide-parser halide->solvedform-parser s)))
 
 #;(with-input-from-file "expr.txt"
   (λ ()

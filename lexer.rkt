@@ -9,7 +9,7 @@
 
 (provide value-tokens op-tokens halide-lexer evaluate-halide-parser)
 
-(define-tokens value-tokens (NUM VAR))
+(define-tokens value-tokens (NUM VAR TVAR NTVAR))
 (define-empty-tokens op-tokens (newline OP CP COMMA + - * / % ^ < > ! EQ GE LE EOF NEG OR AND MAX MIN SELECT TRUE FALSE LII UINT1 UINT0))
 
 (define-lex-abbrevs
@@ -50,6 +50,8 @@
    ["likely_if_innermost" 'LII]
    ;[(:+ (:or lower-letter upper-letter)) (token-VAR (string->symbol lexeme))]
    [(union "x" "y" "z" "w") (token-VAR (string->symbol lexeme))]
+   [(:: "t" (:+ digit)) (token-TVAR (string->symbol lexeme))]
+   [(:: "n" (:+ digit)) (token-NTVAR (string->symbol lexeme))]
    [(:: (union "v" "i" "t" "c") (:+ digit)) (token-VAR (string->symbol lexeme))]
 
    [(:: (:+ digit) #\. (:* digit)) (token-NUM (string->number lexeme))]))
