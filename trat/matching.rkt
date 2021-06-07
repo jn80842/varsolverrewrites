@@ -1,6 +1,6 @@
 #lang racket
 
-(provide sigma-term match varsolver-match)
+(provide sigma-term match varsolver-match rewrite rewrite*)
 
 (struct vname (str int) #:transparent)
 
@@ -10,7 +10,7 @@
 ;; terms are either vname/variables or sigma-terms
 ;; let's make variables strings for now
 
-;; subst is a hash-table mapping variables to 
+;; subst is a hash-table mapping variables to terms
 (struct subst (mapping) #:transparent)
 
 ;; indom: vname -> subst -> bool, returns true if variable has a mapping in subst
@@ -32,7 +32,7 @@
 (define (occurs var t)
   (letrec ([f (λ (t1)
                 (if (string? t1)
-                    (eq? var t1)
+                    (equal? var t1)
                     (f (sigma-term-term-list t1))))])
     (f t)))
 
@@ -46,14 +46,14 @@
                                 [ret-eq-set (cdr eq-set)])
                       (cond [(and (string? (car curr-eq))
                                   (indom (car curr-eq) sub)
-                                  (eq? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
+                                  (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
                             [(and (string? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set
                                                                                                     (hash-set sub (car curr-eq)
                                                                                                               (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
-                                  (eq? (sigma-term-symbol (car curr-eq))
-                                       (sigma-term-symbol (cdr curr-eq)))) (matches (append (map cons (sigma-term-term-list (car curr-eq))
+                                  (equal? (sigma-term-symbol (car curr-eq))
+                                          (sigma-term-symbol (cdr curr-eq)))) (matches (append (map cons (sigma-term-term-list (car curr-eq))
                                                                                                  (sigma-term-term-list (cdr curr-eq))) ret-eq-set) sub)]
                             [else 'fail]))))])
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
@@ -65,7 +65,7 @@
 (define (contains-target-variable? term tvar)
   (letrec ([f (λ (term)
                 (if (string? term)
-                    (eq? term tvar)
+                    (equal? term tvar)
                     (ormap f (sigma-term-term-list term))))])
     (f term)))
 ;; matching for variable solver
@@ -78,7 +78,7 @@
                                 [ret-eq-set (cdr eq-set)])
                       (cond [(and (string? (car curr-eq))
                                   (indom (car curr-eq) sub)
-                                  (eq? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
+                                  (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
                             [(and (string? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-tvar-matching? (car curr-eq))
@@ -89,15 +89,11 @@
                                   (not (contains-target-variable? (cdr curr-eq) tvar))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
-                                  (eq? (sigma-term-symbol (car curr-eq))
-                                       (sigma-term-symbol (cdr curr-eq)))) (matches (append (map cons (sigma-term-term-list (car curr-eq))
+                                  (equal? (sigma-term-symbol (car curr-eq))
+                                          (sigma-term-symbol (cdr curr-eq)))) (matches (append (map cons (sigma-term-term-list (car curr-eq))
                                                                                                  (sigma-term-term-list (cdr curr-eq))) ret-eq-set) sub)]
                             [else 'fail]))))])
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
-
-(define patt1 (sigma-term "+" (list "x" "y")))
-(define obj1 (sigma-term "+" (list "a" "b")))
-(define obj (sigma-term "+" (list (sigma-term "+" (list "a" "b")) "c")))
 
 ;; rewrite: (term * term) list -> term -> term
 (define (rewrite rules input)
@@ -106,23 +102,22 @@
                     (let* ([LHS (car (car ruleset))]
                            [RHS (cdr (car ruleset))]
                            [subst (match LHS input)])
-                      (if (eq? subst 'fail) ;; this rule doesn't match input
+                      (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (lift subst RHS)))))]) ;; this rule does match, return rewritten input
     (f rules)))
 
-(define rule1-LHS (sigma-term "+" (list "x" "x")))
-(define rule1-RHS (sigma-term "*" (list "x" "2")))
-(define input (sigma-term "+" (list "a" "a")))
-
 ;; norm: (term * term) list -> term -> term
 ;; TRAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
-#;(define (rewrite* rules input)
+(define (rewrite* rules input)
   (letrec ([f (λ (expr)
                 (if (string? expr) expr ;; when we hit a variable, do nothing & go up the stack
                     ;; fully normalize all the subterms
-                    (let ([rewritten-term (sigma-term (sigma-term-symbol expr) (map f (sigma-term-term-list)))])
-                      ;; attempt to rewrite 
-                      (f (rewrite rules rewritten-term)))))])
+                    (let ([rewritten-term (sigma-term (sigma-term-symbol expr) (map f (sigma-term-term-list expr)))])
+                      ;; if we can rewrite the new term, recurse, else we're done
+                      (let ([rewrite-output (rewrite rules rewritten-term)])
+                        (if (symbol? rewrite-output)
+                            rewritten-term
+                            (f rewrite-output))))))])
     (f input)))
