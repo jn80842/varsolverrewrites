@@ -7,7 +7,7 @@
 ;; string representing symbol, followed by list of term arguments
 (struct sigma-term (symbol term-list) #:transparent)
 
-;; terms are either vname/variables or sigma-terms
+;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
 
 ;; subst is a hash-table mapping variables to terms
@@ -25,15 +25,16 @@
 (define (lift sub t)
   (letrec ([f (λ (t1)
                 (cond [(string? t1) (if (indom t1 sub) (app sub t1) t1)]
+                      [(integer? t1) t1]
                       [else (sigma-term (sigma-term-symbol t1) (map f (sigma-term-term-list t1)))]))])
     (f t)))
 
 ;; occurs: vname -> term -> bool
 (define (occurs var t)
   (letrec ([f (λ (t1)
-                (if (string? t1)
-                    (equal? var t1)
-                    (f (sigma-term-term-list t1))))])
+                (cond [(string? t1) (equal? var t1)]
+                      [(integer? t1) #f]
+                      [else (ormap f (sigma-term-term-list t1))]))])
     (f t)))
 
 ;; match: term -> term -> subst
@@ -44,7 +45,10 @@
                       (if (empty? eq-set) sub
                           (let ([curr-eq (first eq-set)]
                                 [ret-eq-set (cdr eq-set)])
-                      (cond [(and (string? (car curr-eq))
+                      (cond [(and (integer? (car curr-eq)) ;; integers only match themselves
+                                  (integer? (cdr curr-eq))
+                                  (equal? (car curr-eq) (cdr curr-eq))) (matches ret-eq-set sub)]
+                            [(and (string? (car curr-eq))
                                   (indom (car curr-eq) sub)
                                   (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
                             [(and (string? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set
@@ -62,12 +66,7 @@
   (string-prefix? v "t"))
 (define (is-non-tvar-matching? v)
   (string-prefix? v "n"))
-(define (contains-target-variable? term tvar)
-  (letrec ([f (λ (term)
-                (if (string? term)
-                    (equal? term tvar)
-                    (ormap f (sigma-term-term-list term))))])
-    (f term)))
+
 ;; matching for variable solver
 ;; assume all pattern variables are either target-variable matching or non-target-variable matching
 ;; tvar is the target variable that occurs in the obj/input expr
@@ -76,17 +75,20 @@
                       (if (empty? eq-set) sub
                           (let ([curr-eq (first eq-set)]
                                 [ret-eq-set (cdr eq-set)])
-                      (cond [(and (string? (car curr-eq))
+                      (cond [(and (integer? (car curr-eq)) ;; integers only match themselves
+                                  (integer? (cdr curr-eq))
+                                  (equal? (car curr-eq) (cdr curr-eq))) (matches ret-eq-set sub)]
+                            [(and (string? (car curr-eq))
                                   (indom (car curr-eq) sub)
                                   (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
                             [(and (string? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-tvar-matching? (car curr-eq))
-                                  (contains-target-variable? (cdr curr-eq) tvar)) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                                  (occurs tvar (cdr curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (string? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-non-tvar-matching? (car curr-eq))
-                                  (not (contains-target-variable? (cdr curr-eq) tvar))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                                  (not (occurs tvar (cdr curr-eq)))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
                                   (equal? (sigma-term-symbol (car curr-eq))
@@ -112,7 +114,7 @@
 ;; rewrites an expression bottom-up
 (define (rewrite* rules input)
   (letrec ([f (λ (expr)
-                (if (string? expr) expr ;; when we hit a variable, do nothing & go up the stack
+                (if (or (string? expr) (integer? expr)) expr ;; when we hit a variable, do nothing & go up the stack
                     ;; fully normalize all the subterms
                     (let ([rewritten-term (sigma-term (sigma-term-symbol expr) (map f (sigma-term-term-list expr)))])
                       ;; if we can rewrite the new term, recurse, else we're done
