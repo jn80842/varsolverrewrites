@@ -1,6 +1,7 @@
 #lang racket
 
 (require rackunit)
+(require "termIR.rkt")
 (require "matching.rkt")
 
 (define patt1 (sigma-term "+" (list "x" "y")))
@@ -23,18 +24,23 @@
 
 (define rule1-LHS (sigma-term "+" (list "x" "x")))
 (define rule1-RHS (sigma-term "*" (list "x" 2)))
-(define ruleset1 (list (cons rule1-LHS rule1-RHS)))
+(define rule2-LHS (sigma-term "&&" (list "x" 'true)))
+(define rule2-RHS "x")
+(define ruleset1 (list (cons rule1-LHS rule1-RHS)
+                       (cons rule2-LHS rule2-RHS)))
 (define input (sigma-term "+" (list "a" "a")))
 (define input2 (sigma-term "+" (list "a" "b")))
 
+(check-equal? (rewrite ruleset1 "a") 'fail)
 (check-equal? (rewrite ruleset1 input) (sigma-term "*" (list "a" 2)))
 (check-equal? (rewrite ruleset1 input2) 'fail)
 (check-equal? (rewrite ruleset1 (sigma-term "-" (list input "d"))) 'fail)
 (check-equal? (rewrite ruleset1 (sigma-term "+" (list (sigma-term "*" (list "a" 2))
                                                       (sigma-term "*" (list "a" 2)))))
                        (sigma-term "*" (list (sigma-term "*" (list "a" 2)) 2)))
+(check-equal? (rewrite ruleset1 (sigma-term "&&" (list "a" 'true))) "a")
 
-(check-equal? (rewrite* ruleset1 "x") "x")
+(check-equal? (rewrite* ruleset1 "a") "a")
 (check-equal? (rewrite* ruleset1 input) (sigma-term "*" (list "a" 2)))
 (check-equal? (rewrite* ruleset1 (sigma-term "-" (list input "d")))
               (sigma-term "-" (list (sigma-term "*" (list "a" 2)) "d")))
