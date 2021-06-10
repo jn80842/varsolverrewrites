@@ -4,6 +4,8 @@
 (require "halide-sketch.rkt")
 (require "halide-print-sketch.rkt")
 (require "halide-parser.rkt")
+(require "varsolverTRS.rkt")
+(require "trat/termIR.rkt")
 
 ;; assume LHS is a function that takes the same inputs as the RHS sketch
 (define (synthesize-rewrite LHS sk inputs)
@@ -187,8 +189,19 @@
 (cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
 ))
 
-(for ([lhs (list (list-ref patts 5))])
+#;(for ([lhs (list (list-ref patts 5))])
   (begin
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 0)
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 1)
     (synthesize-3var-rewrite (car lhs) (cdr lhs) 2)))
+
+(define (check-patt patt tar-idx)
+  (let ([renamed-patt (halide->renamevars patt (make-hash (map cons (list "x" "y" "z")
+                                                                     (insert-target-var (list "n0" "n1") "t0" tar-idx))))]
+        [tvar (list-ref '("x" "y" "z") tar-idx)])
+    (if (halide-expr-in-solved-form? renamed-patt)
+        (displayln (format "~a with target variable ~a is already in solved form" patt tvar))
+        (let ([normalized-patt (normalize->termIR patt tvar)])
+          (unless (equal? normalized-patt (halide->termIR patt))
+            (displayln (format "~a with target variable ~a normalized to ~a"
+                               patt tvar (termIR->halide normalized-patt))))))))

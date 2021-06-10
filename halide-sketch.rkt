@@ -1,8 +1,14 @@
 #lang rosette
 
 (require "halide-lang.rkt")
+(require "trat/termIR.rkt")
 
-(provide (all-defined-out))
+(provide (struct-out sketch)
+         (struct-out insn))
+(provide get-symbolic-sketch
+         get-sketch-function
+         get-topn-sketch-function
+         termIR->function)
 
 (define (get-sym-int)
   (define-symbolic* x integer?)
@@ -42,3 +48,55 @@
 (define (get-topn-sketch-function sk op-idx)
   (λ (tarvar . inputs) 
     ((get-operator-function-by-idx (sketch-operator-list sk) op-idx) tarvar (apply (get-sketch-function sk) inputs) 0)))
+
+(define operator-list
+  (list add-operator ;; 0
+        sub-operator ;; 1
+        mul-operator ;; 2
+        div-operator ;; 3
+        mod-operator ;; 4
+        min-operator ;; 5
+        max-operator ;; 6
+        eqi-operator ;; 7
+        eqb-operator ;; 8
+        neqi-operator ;; 9
+        neqb-operator ;; 10
+        lt-operator ;; 11
+        le-operator ;; 12
+        gt-operator ;; 13
+        ge-operator ;; 14
+        and-operator ;; 15
+        or-operator ;; 16
+        not-operator ;; 17
+        seli-operator ;; 18
+        selb-operator ;; 19
+        ))
+
+(define variable-list (list "x" "y" "z"))
+(define constant-list (list 0 1 2 -1 #t #f))
+(define operator-lookup (make-hash
+                         (list (cons '+ hld-add)
+                               (cons '- hld-sub)
+                               (cons '* hld-mul)
+                               (cons '/ hld-div)
+                               (cons '% hld-mod)
+                               (cons 'max hld-max)
+                               (cons 'min hld-min)
+                               (cons 'select hld-seli)
+                               (cons '= hld-eqi)
+                               (cons '!= hld-neqi)
+                               (cons '< hld-lt)
+                               (cons '> hld-gt)
+                               (cons '<= hld-le)
+                               (cons '>= hld-ge)
+                               (cons '&& hld-and)
+                               (cons '|| hld-or)
+                               (cons '! hld-not))))
+
+;; takes a termIR expression and returns a function
+(define (termIR->function t variable-list)
+  (letrec ([f (λ (inputs t)
+                (cond [(term-variable? t) (list-ref inputs (index-of variable-list t))]
+                       [(sigma-term? t) (apply (hash-ref operator-lookup (sigma-term-symbol t)) (map (curry f inputs) (sigma-term-term-list t)))]
+                       [else 'fail]))])
+    (λ inputs (f inputs t))))
