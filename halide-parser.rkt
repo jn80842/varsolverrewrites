@@ -9,7 +9,8 @@
 (provide halide->rktlang
          halide->renamevars
          halide->countops
-         halide-expr-in-solved-form?)
+         halide-expr-in-solved-form?
+         halide->termIR)
 
 (define halide->termIR-parser
   (parser
@@ -36,9 +37,9 @@
            [(exp) $1])
 
     (exp [(NUM) $1]
-         [(VAR) $1]
-         [(TVAR) $1]
-         [(NTVAR) $1]
+         [(VAR) (symbol->string $1)]
+         [(TVAR) (symbol->string $1)]
+         [(NTVAR) (symbol->string $1)]
          [(TRUE) "true"] ;; need to add a boolean type
          [(FALSE) "false"]
          [(UINT1) "true"]
@@ -290,6 +291,9 @@
   (with-handlers ([(λ (e) #t)
                    (λ (e) #f)])
     (evaluate-halide-parser halide->solvedform-parser s)))
+
+(define (halide->termIR s)
+  (evaluate-halide-parser halide->termIR-parser s))
 
 #;(with-input-from-file "expr.txt"
   (λ ()

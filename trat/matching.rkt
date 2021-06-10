@@ -2,9 +2,8 @@
 
 (require "termIR.rkt")
 
-(provide match varsolver-match rewrite rewrite*)
-
-
+(provide match rewrite rewrite*
+         varsolver-match varsolver-rewrite varsolver-rewrite*)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -69,7 +68,7 @@
 ;; matching for variable solver
 ;; assume all pattern variables are either target-variable matching or non-target-variable matching
 ;; tvar is the target variable that occurs in the obj/input expr
-(define (varsolver-match patt obj tvar)
+(define (varsolver-match tvar patt obj)
   (letrec ([matches (λ (eq-set sub)
                       (if (empty? eq-set) sub
                           (let ([curr-eq (first eq-set)]
@@ -97,28 +96,34 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; rewrite: (term * term) list -> term -> term
-(define (rewrite rules input)
+(define (rewrite-parameterize matcher rules input)
   (letrec ([f (λ (ruleset)
                 (if (empty? ruleset) 'fail ;; tried to match input to all rules and failed
                     (let* ([LHS (car (car ruleset))]
                            [RHS (cdr (car ruleset))]
-                           [subst (match LHS input)])
+                           [subst (matcher LHS input)])
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (lift subst RHS)))))]) ;; this rule does match, return rewritten input
     (f rules)))
 
+(define rewrite (curry rewrite-parameterize match))
+(define (varsolver-rewrite tvar rules input) ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input))
+
 ;; norm: (term * term) list -> term -> term
 ;; TRAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
-(define (rewrite* rules input)
+(define (rewrite*-parameterize rewriter rules input)
   (letrec ([f (λ (expr)
                 (if (or (term-variable? expr) (term-constant? expr)) expr ;; when we hit a variable or constant, do nothing & go up the stack
                     ;; fully normalize all the subterms
                     (let ([rewritten-term (sigma-term (sigma-term-symbol expr) (map f (sigma-term-term-list expr)))])
                       ;; if we can rewrite the new term, recurse, else we're done
-                      (let ([rewrite-output (rewrite rules rewritten-term)])
+                      (let ([rewrite-output (rewriter rules rewritten-term)])
                         (if (symbol? rewrite-output)
                             rewritten-term
                             (f rewrite-output))))))])
     (f input)))
+
+(define rewrite* (curry rewrite*-parameterize rewrite))
+(define (varsolver-rewrite* tvar rules input) ((curry rewrite*-parameterize (curry varsolver-rewrite tvar)) rules input))
