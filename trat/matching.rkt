@@ -115,7 +115,11 @@
                            [subst (matcher (rule-lhs r) input)])
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
-                          (lift subst (rule-rhs r))))))]) ;; this rule does match, return rewritten input
+                          (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
+                            (displayln (format "~a -> ~a via ~a -> ~a (~a)" (termIR->halide input) (termIR->halide rewritten-input)
+                                               (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) (rule-name r)))
+                            rewritten-input)
+                          ))))])
     (f rules)))
 
 (define rewrite (curry rewrite-parameterize match))
