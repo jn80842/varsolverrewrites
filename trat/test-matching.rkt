@@ -27,8 +27,8 @@
 (define rule1-RHS (sigma-term '* (list "x" 2)))
 (define rule2-LHS (sigma-term '&& (list "x" 'true)))
 (define rule2-RHS "x")
-(define ruleset1 (list (cons rule1-LHS rule1-RHS)
-                       (cons rule2-LHS rule2-RHS)))
+(define ruleset1 (list (make-rule rule1-LHS rule1-RHS)
+                       (make-rule rule2-LHS rule2-RHS)))
 (define input (sigma-term '+ (list "a" "a")))
 (define input2 (sigma-term '+ (list "a" "b")))
 
@@ -51,7 +51,7 @@
 
 (define vsrule1-LHS (sigma-term '+ (list "n0" "t0")))
 (define vsrule1-RHS (sigma-term '+ (list "t0" "n0")))
-(define vsruleset1 (list (cons vsrule1-LHS vsrule1-RHS)))
+(define vsruleset1 (list (make-rule vsrule1-LHS vsrule1-RHS)))
 
 (check-equal? (varsolver-rewrite "y" vsruleset1 patt1) (sigma-term '+ (list "y" "x")))
 (check-equal? (varsolver-rewrite "x" vsruleset1 patt1) 'fail)
@@ -59,3 +59,22 @@
 (check-equal? (varsolver-rewrite* "c" vsruleset1 input2) input2)
 (check-equal? (varsolver-rewrite* "b" vsruleset1 obj4)
               (sigma-term '% (list (sigma-term '+ (list "b" "a")) (sigma-term '+ (list "b" "a")))))
+(define obj5 (sigma-term '+ (list "z" (sigma-term '* '("x" "y")))))
+(define obj6 (sigma-term
+              'min
+              (list
+               (sigma-term '+ (list (sigma-term '+ '("y" "x")) "z"))
+               (sigma-term '+ (list "z" (sigma-term '* '("x" "y")))))))
+
+(check-equal? (varsolver-rewrite "x" vsruleset1 obj5) (sigma-term '+ (list (sigma-term '* '("x" "y")) "z")))
+(check-equal? (varsolver-rewrite* "x" vsruleset1 obj6) (sigma-term
+              'min
+              (list
+               (sigma-term '+ (list (sigma-term '+ '("x" "y")) "z"))
+               (sigma-term '+ (list (sigma-term '* '("x" "y")) "z")))))
+
+(define vsruleset2 (list (make-rule (sigma-term '+ (list (sigma-term '* (list "t0" "x")) (sigma-term '* (list "t0" "y"))))
+                                    (sigma-term '* (list "t0" (sigma-term '+ (list "x" "y")))))))
+
+(define obj7 (sigma-term '+ (list (sigma-term '* (list "a" "b")) (sigma-term '* (list "a" "c")))))
+(check-equal? (varsolver-rewrite* "a" vsruleset2 obj7) (sigma-term '* (list "a" (sigma-term '+ (list "b" "c")))))

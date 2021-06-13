@@ -10,7 +10,7 @@
 (provide value-tokens op-tokens halide-lexer evaluate-halide-parser)
 
 (define-tokens value-tokens (NUM VAR TVAR NTVAR))
-(define-empty-tokens op-tokens (newline OP CP COMMA + - * / % ^ < > ! EQ GE LE EOF NEG OR AND MAX MIN SELECT TRUE FALSE LII UINT1 UINT0))
+(define-empty-tokens op-tokens (newline OP CP COMMA + - * / % ^ < > ! EQ NEQ GE LE EOF NEG OR AND MAX MIN SELECT TRUE FALSE LII UINT1 UINT0))
 
 (define-lex-abbrevs
  (lower-letter (:/ "a" "z"))
@@ -37,6 +37,7 @@
    [">=" 'GE]
    ["<=" 'LE]
    ["==" 'EQ]
+   ["!=" 'NEQ]
    ["(" 'OP]
    [")" 'CP]
    ["," 'COMMA]

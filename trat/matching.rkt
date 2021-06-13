@@ -2,7 +2,8 @@
 
 (require "termIR.rkt")
 
-(provide match rewrite rewrite*
+(provide (struct-out rule))
+(provide make-rule match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*)
 
 ;; terms are vname/variables, integers, or sigma-terms
@@ -10,6 +11,12 @@
 
 ;; subst is a hash-table mapping variables to terms
 (struct subst (mapping) #:transparent)
+
+;; a rule has a lefthand side, a righthand side and a name
+(struct rule (lhs rhs name) #:transparent)
+
+(define (make-rule lhs rhs)
+  (rule lhs rhs ""))
 
 ;; indom: vname -> subst -> bool, returns true if variable has a mapping in subst
 (define (indom v sub)
@@ -64,6 +71,8 @@
   (string-prefix? v "t"))
 (define (is-non-tvar-matching? v)
   (string-prefix? v "n"))
+(define (is-general-matching? v)
+  (and (not (is-tvar-matching? v)) (not (is-non-tvar-matching? v))))
 
 ;; matching for variable solver
 ;; assume all pattern variables are either target-variable matching or non-target-variable matching
@@ -87,6 +96,9 @@
                                   (not (indom (car curr-eq) sub))
                                   (is-non-tvar-matching? (car curr-eq))
                                   (not (occurs tvar (cdr curr-eq)))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                            [(and (string? (car curr-eq))
+                                  (not (indom (car curr-eq) sub))
+                                  (is-general-matching? (car curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
                                   (equal? (sigma-term-symbol (car curr-eq))
@@ -99,12 +111,11 @@
 (define (rewrite-parameterize matcher rules input)
   (letrec ([f (λ (ruleset)
                 (if (empty? ruleset) 'fail ;; tried to match input to all rules and failed
-                    (let* ([LHS (car (car ruleset))]
-                           [RHS (cdr (car ruleset))]
-                           [subst (matcher LHS input)])
+                    (let* ([r (car ruleset)]
+                           [subst (matcher (rule-lhs r) input)])
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
-                          (lift subst RHS)))))]) ;; this rule does match, return rewritten input
+                          (lift subst (rule-rhs r))))))]) ;; this rule does match, return rewritten input
     (f rules)))
 
 (define rewrite (curry rewrite-parameterize match))
