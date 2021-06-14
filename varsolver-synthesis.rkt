@@ -269,3 +269,6 @@
           (unless (equal? normalized-patt (halide->termIR patt))
             (displayln (format "~a with target variable ~a normalized to ~a"
                                patt tvar (termIR->halide normalized-patt))))))))
+
+(for ([lhs-pair patts])
+  (find-rule (car lhs-pair)))
