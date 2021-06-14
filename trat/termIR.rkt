@@ -33,7 +33,7 @@
                                                                                  (f (list-ref (sigma-term-term-list tprime) 1))
                                                                                  (f (list-ref (sigma-term-term-list tprime) 2)))]
                       [(and (sigma-term? tprime)
-                            (equal? (sigma-term-symbol tprime) '!)) (format "~(~a)" (f (list-ref (sigma-term-term-list tprime) 0)))]
+                            (equal? (sigma-term-symbol tprime) '!)) (format "!(~a)" (f (list-ref (sigma-term-term-list tprime) 0)))]
                       [else (format "(~a ~a ~a)"
                                    (f (list-ref (sigma-term-term-list tprime) 0))
                                    (sigma-term-symbol tprime)
