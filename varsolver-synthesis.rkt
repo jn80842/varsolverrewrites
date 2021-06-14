@@ -102,7 +102,7 @@
            [model (time (with-handlers ([(λ (e) #t)
                                          (λ (e) (displayln (format "Timeout searching for RHS for ~a with insn count ~a"
                                                                    renamed-LHS (length (sketch-insn-list sk)))))])
-                          (synthesize #:forall (symbolics tarvar non-tarvars)
+                          (synthesize #:forall (cons tarvar non-tarvars)
                                       #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
       (unless (void? model)
         (if (unsat? model)
