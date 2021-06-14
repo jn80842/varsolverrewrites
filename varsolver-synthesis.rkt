@@ -6,6 +6,7 @@
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
 (require "trat/termIR.rkt")
+(require "trat/matching.rkt")
 
 ;; assume LHS is a function that takes the same inputs as the RHS sketch
 (define (synthesize-rewrite LHS sk inputs)
@@ -42,7 +43,7 @@
 
 (define-symbolic* sym-tarvar integer?)
 
-(define (synthesize-topn-rewrite LHS sk op-idx tarvar inputs)
+#;(define (synthesize-topn-rewrite LHS sk op-idx tarvar inputs)
   (let* ([evaled-sketch (apply (get-topn-sketch-function sk op-idx) tarvar inputs)]
          [evaled-LHS (apply LHS tarvar inputs)]
          [model (time (synthesize #:forall (symbolics (cons tarvar inputs))
@@ -62,6 +63,9 @@
 ;; LHS contains 3 variables
 (define (synthesize-3var-rewrite LHS-string LHS-func tar-idx)
   (let* ([op-count (halide->countops LHS-string)]
+         [LHS-termIR (halide->termIR LHS-string)]
+         [LHS-variables (termIR->variables LHS-termIR)]
+         [non-target-variables (for/list ([i (range (sub1 (length LHS-variables)))]) (format "n~a" i))]
          [sk (get-symbolic-sketch operator-list 2 op-count)]
          [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
                                                                      (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
@@ -85,6 +89,66 @@
                                    (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
           ))))
 
+;; inputs: pattern, target variable idx
+;; returns: rule or void
+(define (synthesize-topn-rewrite renamed-LHS LHS-inputs sk tar-idx)
+  (begin
+    (clear-asserts!)
+    (define-symbolic* tarvar integer?)
+    (define-symbolic* root-op integer?)
+    (let* ([non-tarvars (for/list ([i (range (sketch-input-count sk))]) (get-sym-int))]
+           [evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar non-tarvars)]
+           [evaled-LHS (apply (termIR->function (halide->termIR renamed-LHS) LHS-inputs) tarvar non-tarvars)]
+           [model (time (with-handlers ([(λ (e) #t)
+                                         (λ (e) (displayln (format "Timeout searching for RHS for ~a with insn count ~a"
+                                                                   renamed-LHS (length (sketch-insn-list sk)))))])
+                          (synthesize #:forall (symbolics tarvar non-tarvars)
+                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+      (unless (void? model)
+        (if (unsat? model)
+            (displayln (format "Could not find RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
+            (begin
+              (displayln (format "Found rule ~a -> ~a" renamed-LHS (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))
+              (make-rule (halide->termIR renamed-LHS) (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))))))
+
+(define (synth-over-insn-count-range LHS inputs insn-count tar-idx)
+  (letrec ([f (λ (i)
+                (if (> i insn-count)
+                    'fail
+                    (let* ([sk (get-symbolic-sketch operator-list (length inputs) i)]
+                           [rule (synthesize-topn-rewrite LHS inputs sk tar-idx)])
+                      (if (void? rule)
+                          (f (add1 i))
+                          rule))))])
+    (f 0)))
+
+;; note: we search for rules for any selection of target var from the variables in pattern
+;; thus it's possible to learn rules that will not apply to the original input
+(define (find-rule patt)
+  (let ([LHS-variables (termIR->variables (halide->termIR patt))])
+    ;; for each choice of target variable in pattern
+    (for ([tar-idx (range (length LHS-variables))])
+      (let* ([input-count (length LHS-variables)]
+             [renamed-variablesprime (insert-target-var (for/list ([i (range (sub1 input-count))])
+                                                          (format "n~a" (+ i input-count)))
+                                                        "t1" tar-idx)]
+             [renamed-variables (insert-target-var (for/list ([i (range (sub1 input-count))])
+                                                     (format "n~a" i)) "t0" tar-idx)]
+             [renamed-LHSprime (halide->renamevars patt (make-hash (map cons LHS-variables renamed-variablesprime)))]
+             [normalized-LHSprime (termIR->halide (varsolver-rewrite* "t1" originalvarsolverTRS (halide->termIR renamed-LHSprime)))]
+             [normalized-renamed-LHS (halide->renamevars normalized-LHSprime (make-hash (map cons renamed-variablesprime
+                                                                                             renamed-variables)))])
+        (if (halide-expr-in-solved-form? normalized-renamed-LHS)
+            (displayln (format "In solved form: ~a" normalized-renamed-LHS))
+            (begin (displayln (format "Ready for synthesis: ~a" normalized-renamed-LHS))
+                   ;; attempt to synth a RHS in t op E format, where E has from 1 to (LHS op count) insn
+                   (let ([synthed-rule (synth-over-insn-count-range normalized-renamed-LHS renamed-variables
+                                                                    (halide->countops normalized-renamed-LHS) tar-idx)])
+                     (if (eq? 'fail synthed-rule)
+                         (displayln (format "Could not find valid RHS for ~a" normalized-renamed-LHS))
+                         (displayln (format "FOUND RULE: ~a -> ~a" normalized-renamed-LHS synthed-rule)))))
+            )
+        ))))
 
 (define patts (list
 (cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))

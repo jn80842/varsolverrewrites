@@ -5,7 +5,8 @@
 
 (provide (struct-out sketch)
          (struct-out insn))
-(provide get-symbolic-sketch
+(provide get-sym-int
+         get-symbolic-sketch
          get-sketch-function
          get-topn-sketch-function
          termIR->function)

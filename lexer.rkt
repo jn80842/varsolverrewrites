@@ -53,7 +53,7 @@
    [(union "x" "y" "z" "w") (token-VAR (string->symbol lexeme))]
    [(:: "t" (:+ digit)) (token-TVAR (string->symbol lexeme))]
    [(:: "n" (:+ digit)) (token-NTVAR (string->symbol lexeme))]
-   [(:: (union "v" "i" "t" "c") (:+ digit)) (token-VAR (string->symbol lexeme))]
+   [(:: (union "v" "i" "c") (:+ digit)) (token-VAR (string->symbol lexeme))]
 
    [(:: (:+ digit) #\. (:* digit)) (token-NUM (string->number lexeme))]))
 

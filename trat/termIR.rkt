@@ -1,7 +1,7 @@
 #lang racket
 
 (provide (struct-out sigma-term))
-(provide term-constant? term-variable? termIR->halide)
+(provide term-constant? term-variable? termIR->halide termIR->variables)
 
 (struct vname (str int) #:transparent)
 
@@ -39,3 +39,10 @@
                                    (sigma-term-symbol tprime)
                                    (f (list-ref (sigma-term-term-list tprime) 1)))]))])
     (f t)))
+
+(define (termIR->variables t)
+  (letrec ([f (λ (tprime)
+                (cond [(string? tprime) (list tprime)]
+                      [(sigma-term? tprime) (flatten (map f (sigma-term-term-list tprime)))]
+                      [else '()]))])
+    (set->list (list->set (f t)))))

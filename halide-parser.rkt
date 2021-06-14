@@ -21,7 +21,7 @@
    (error (lambda (a b c) (void)))
 
    (precs (left OR AND)
-          (right EQ)
+          (right EQ NEQ)
           (left < > GE LE)
           (left - +)
           (left * / %)
@@ -72,7 +72,7 @@
    (error (lambda (a b c) (void)))
 
    (precs (left OR AND)
-          (right EQ)
+          (right EQ NEQ)
           (left < > GE LE)
           (left - +)
           (left * / %)
@@ -136,7 +136,7 @@
    (error (lambda (a b c) (void)))
 
    (precs (left OR AND)
-          (right EQ)
+          (right EQ NEQ)
           (left < > GE LE)
           (left - +)
           (left * / %)
@@ -160,7 +160,7 @@
          [(UINT1) "true"]
          [(UINT0) "false"]
          [(exp EQ exp) (format "(eq? ~a ~a)" $1 $3)] ;; we don't use the halide-lang methods so we don't have to type args
-         [(exp NEQ exp) (format "(not (eq? ~a ~a)" $1 $3)]]
+         [(exp NEQ exp) (format "(not (eq? ~a ~a)" $1 $3)]
          [(MAX OP exp COMMA exp CP) (format "(max ~a ~a)" $3 $5)]
          [(MIN OP exp COMMA exp CP) (format "(min ~a ~a)" $3 $5)]
          [(SELECT OP exp COMMA exp COMMA exp CP) (format "(if ~a ~a ~a)" $3 $5 $7)]
@@ -188,7 +188,7 @@
    (error (lambda (a b c) (void)))
 
    (precs (left OR AND)
-          (right EQ)
+          (right EQ NEQ)
           (left < > GE LE)
           (left - +)
           (left * / %)
@@ -205,6 +205,8 @@
 
     (exp [(NUM) $1]
          [(VAR) (hash-ref varmap (symbol->string $1))]
+         [(TVAR) (hash-ref varmap (symbol->string $1))]
+         [(NTVAR) (hash-ref varmap (symbol->string $1))]
          [(TRUE) "true"]
          [(FALSE) "false"]
          [(UINT1) "true"]
@@ -238,7 +240,7 @@
    (error (lambda (a b c) (void)))
 
    (precs (left OR AND)
-          (right EQ)
+          (right EQ NEQ)
           (left < > GE LE)
           (left - +)
           (left * / %)
@@ -255,6 +257,8 @@
 
     (exp [(NUM) 0]
          [(VAR) 0]
+         [(TVAR) 0]
+         [(NTVAR) 0]
          [(TRUE) 0]
          [(FALSE) 0]
          [(UINT1) 0]
