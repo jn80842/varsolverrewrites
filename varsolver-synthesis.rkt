@@ -108,7 +108,7 @@
         (if (unsat? model)
             (displayln (format "Could not find RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
             (begin
-              (displayln (format "Found rule ~a -> ~a" renamed-LHS (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))
+           ;   (displayln (format "Found rule ~a -> ~a" renamed-LHS (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))
               (make-rule (halide->termIR renamed-LHS) (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))))))
 
 (define (synth-over-insn-count-range LHS inputs insn-count tar-idx)
@@ -146,8 +146,8 @@
                                                                     (halide->countops normalized-renamed-LHS) tar-idx)])
                      (if (eq? 'fail synthed-rule)
                          (displayln (format "Could not find valid RHS for ~a" normalized-renamed-LHS))
-                         (displayln (format "FOUND RULE: ~a -> ~a" normalized-renamed-LHS synthed-rule)))))
-            )
+                         (displayln (format "FOUND RULE: ~a -> ~a" (halide->termIR (rule-lhs synthed-rule)) (halide->termIR (rule-rhs synthed-rule)))))
+            )))
         ))))
 
 (define patts (list
@@ -252,12 +252,6 @@
 (cons "!(x < (y + z))" (λ (x y z) (hld-not (hld-lt x (hld-add y z)))))
 (cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
 ))
-
-#;(for ([lhs (list (list-ref patts 5))])
-  (begin
-    (synthesize-3var-rewrite (car lhs) (cdr lhs) 0)
-    (synthesize-3var-rewrite (car lhs) (cdr lhs) 1)
-    (synthesize-3var-rewrite (car lhs) (cdr lhs) 2)))
 
 (define (check-patt patt tar-idx)
   (let ([renamed-patt (halide->renamevars patt (make-hash (map cons (list "x" "y" "z")
