@@ -42,6 +42,14 @@
                       [else (ormap f (sigma-term-term-list t1))]))])
     (f t)))
 
+;; solve: (term * term) list * subst -> subst
+
+;; elim: vname -> term -> (term * term) list -> subst -> subst
+
+;; unify: (term * term) -> subst
+(define (unify term1 term2)
+  (solve [(cons term1 term2)] []))
+
 ;; match: term -> term -> subst
 ;; given a pattern (LHS) and object (input term), find a substitution that will match one to the other
 ;; instead of throwing an exception, return 'fail symbol

@@ -146,7 +146,7 @@
                                                                     (halide->countops normalized-renamed-LHS) tar-idx)])
                      (if (eq? 'fail synthed-rule)
                          (displayln (format "Could not find valid RHS for ~a" normalized-renamed-LHS))
-                         (displayln (format "FOUND RULE: ~a -> ~a" (halide->termIR (rule-lhs synthed-rule)) (halide->termIR (rule-rhs synthed-rule)))))
+                         (displayln (format "FOUND RULE: ~a -> ~a" (termIR->halide (rule-lhs synthed-rule)) (termIR->halide (rule-rhs synthed-rule)))))
             )))
         ))))
 
