@@ -98,6 +98,8 @@
 (define (termIR->function t variable-list)
   (letrec ([f (λ (inputs t)
                 (cond [(term-variable? t) (list-ref inputs (index-of variable-list t))]
-                       [(sigma-term? t) (apply (hash-ref operator-lookup (sigma-term-symbol t)) (map (curry f inputs) (sigma-term-term-list t)))]
-                       [else 'fail]))])
+                      [(term-constant? t) t]
+                      [(sigma-term? t) (apply (hash-ref operator-lookup (sigma-term-symbol t))
+                                              (map (curry f inputs) (sigma-term-term-list t)))]
+                      [else 'fail]))])
     (λ inputs (f inputs t))))
