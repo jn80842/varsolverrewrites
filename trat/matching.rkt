@@ -19,6 +19,8 @@
 (define (make-rule lhs rhs)
   (rule lhs rhs ""))
 
+(struct trs (ruleset rule->string order-hash))
+
 ;; indom: vname -> subst -> bool, returns true if variable has a mapping in subst
 (define (indom v sub)
   (hash-has-key? sub v))
@@ -121,7 +123,7 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; rewrite: (term * term) list -> term -> term
-(define (rewrite-parameterize matcher rules input)
+(define (rewrite-parameterize matcher rules input rule->string)
   (letrec ([f (λ (ruleset)
                 (if (empty? ruleset) 'fail ;; tried to match input to all rules and failed
                     (let* ([r (car ruleset)]
@@ -129,29 +131,30 @@
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
-                            (displayln (format "~a -> ~a via ~a -> ~a (~a)" (termIR->halide input) (termIR->halide rewritten-input)
-                                               (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) (rule-name r)))
+                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                                               (rule->string r)))
                             rewritten-input)
                           ))))])
     (f rules)))
 
 (define rewrite (curry rewrite-parameterize match))
-(define (varsolver-rewrite tvar rules input) ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input))
+(define (varsolver-rewrite tvar rules input rule->string) ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input rule->string))
 
 ;; norm: (term * term) list -> term -> term
 ;; TRAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
-(define (rewrite*-parameterize rewriter rules input)
+(define (rewrite*-parameterize rewriter rules input rule->string)
   (letrec ([f (λ (expr)
                 (if (or (term-variable? expr) (term-constant? expr)) expr ;; when we hit a variable or constant, do nothing & go up the stack
                     ;; fully normalize all the subterms
                     (let ([rewritten-term (sigma-term (sigma-term-symbol expr) (map f (sigma-term-term-list expr)))])
                       ;; if we can rewrite the new term, recurse, else we're done
-                      (let ([rewrite-output (rewriter rules rewritten-term)])
+                      (let ([rewrite-output (rewriter rules rewritten-term rule->string)])
                         (if (symbol? rewrite-output)
                             rewritten-term
                             (f rewrite-output))))))])
     (f input)))
 
 (define rewrite* (curry rewrite*-parameterize rewrite))
-(define (varsolver-rewrite* tvar rules input) ((curry rewrite*-parameterize (curry varsolver-rewrite tvar)) rules input))
+(define (varsolver-rewrite* tvar rules input rule->string)
+  ((curry rewrite*-parameterize (curry varsolver-rewrite tvar)) rules input rule->string))
