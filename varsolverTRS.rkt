@@ -4,7 +4,10 @@
 (require "trat/termIR.rkt")
 (require "trat/matching.rkt")
 
-(provide originalvarsolverTRS normalize normalize->termIR)
+(provide originalvarsolverTRS normalize normalize->termIR
+         tvar-count-reduction-order? tvar-count-reduction-order-equal?
+         move-tvar-left-reduction-order? move-tvar-left-reduction-order-equal?
+         move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal?)
 
 (define originalvarsolverTRS-halide (list
 (list "n0 + t0" "t0 + n0" "vsadd133")
@@ -123,3 +126,68 @@
 
 (define (normalize->termIR halidestr tvar)
   (varsolver-rewrite* tvar originalvarsolverTRS (halide->termIR input-halidestr)))
+
+;; order checking
+(define (count-target-variables r)
+  (letrec ([f (λ (t)
+                (cond [(and (term-variable? t)
+                            (is-tvar-matching? t)) 1]
+                      [(and (term-variable? t)
+                            (not (is-tvar-matching? t))) 0]
+                      [(term-constant? t) 0]
+                      [else (foldr + 0 (map f (sigma-term-term-list t)))]))])
+    (f r)))
+
+(define (tvar-count-reduction-order? r)
+  (> (count-target-variables (rule-lhs r)) (count-target-variables (rule-rhs r))))
+
+(define (tvar-count-reduction-order-equal? r)
+  (equal? (count-target-variables (rule-lhs r)) (count-target-variables (rule-rhs r))))
+
+(define (get-dps-ordered-variables t)
+  (letrec ([f (λ (t)
+                (cond [(term-variable? t) (list t)]
+                      [(term-constant? t) '()]
+                      [(sigma-term? t) (map f (sigma-term-term-list t))]
+                      [else '()]))])
+    (flatten (f t))))
+
+(define (move-tvar-left-reduction-order? r)
+  (let ([vars-lhs (get-dps-ordered-variables (rule-lhs r))]
+        [vars-rhs (get-dps-ordered-variables (rule-rhs r))]
+        [get-var-string (λ (l) (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) ""))])
+    (and (equal? (filter is-tvar-matching? vars-lhs) (filter is-tvar-matching? vars-rhs))
+         (string<? (get-var-string vars-rhs) (get-var-string vars-lhs)))))
+
+(define (move-tvar-left-reduction-order-equal? r)
+  (let ([vars-lhs (get-dps-ordered-variables (rule-lhs r))]
+        [vars-rhs (get-dps-ordered-variables (rule-rhs r))]
+        [get-var-string (λ (l) (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) ""))])
+    (and (equal? (filter is-tvar-matching? vars-lhs) (filter is-tvar-matching? vars-rhs))
+         (equal? (get-var-string vars-rhs) (get-var-string vars-lhs)))))
+
+(define (get-bfs-tvarcount-hash t)
+  (let ([varcount-hash (make-hash '())])
+    (letrec ([f (λ (t n)
+                  (cond [(and (term-variable? t) (is-tvar-matching? t)) (hash-set! varcount-hash n (add1 (hash-ref varcount-hash n 0)))]
+                        [(and (term-variable? t) (not (is-tvar-matching? t))) (void)]
+                        [(term-constant? t) (void)]
+                        [(sigma-term? t) (map (λ (t1) (f t1 (add1 n))) (sigma-term-term-list t))]
+                        [else (void)]))])
+      (begin
+        (f t 0)
+        varcount-hash))))
+
+(define (move-tvar-up-reduction-order? r)
+  (let* ([lhs-hash (get-bfs-tvarcount-hash (rule-lhs r))]
+         [rhs-hash (get-bfs-tvarcount-hash (rule-rhs r))]
+         [all-keys (sort (remove-duplicates (append (hash-keys lhs-hash) (hash-keys rhs-hash))) <)])
+    (for/first ([k all-keys]
+      #:when (not (equal? (hash-ref lhs-hash k 0) (hash-ref rhs-hash k 0))))
+      (< (hash-ref lhs-hash k 0) (hash-ref rhs-hash k 0)))))
+
+(define (move-tvar-up-reduction-order-equal? r)
+  (let ([lhs-hash (get-bfs-tvarcount-hash (rule-lhs r))]
+        [rhs-hash (get-bfs-tvarcount-hash (rule-rhs r))])
+    (equal? lhs-hash rhs-hash)))
+  

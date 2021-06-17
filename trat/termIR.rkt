@@ -10,6 +10,13 @@
 ;; symbol representing Halide function symbol, followed by list of term arguments
 (struct sigma-term (symbol term-list) #:transparent)
 
+(define (get-sigma-term-type sterm)
+  (if (equal? 'select (sigma-term-symbol sterm))
+      'unknown ;; we could recursively check the select args, but do the cheap thing for now
+      (if (member (sigma-term-symbol sterm) '(max min + - * / %))
+          'integer
+          'boolean)))
+
 (define (term-constant? t)
   (or (integer? t) (equal? t 'true) (equal? t 'false)))
 

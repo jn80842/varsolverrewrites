@@ -4,7 +4,8 @@
 
 (provide (struct-out rule))
 (provide make-rule match rewrite rewrite*
-         varsolver-match varsolver-rewrite varsolver-rewrite*)
+         varsolver-match varsolver-rewrite varsolver-rewrite*
+         is-tvar-matching? is-non-tvar-matching?)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -43,12 +44,16 @@
     (f t)))
 
 ;; solve: (term * term) list * subst -> subst
-
 ;; elim: vname -> term -> (term * term) list -> subst -> subst
+(define (solve termpairs s)
+  (letrec ([solve (λ (pairs sub1)
+                    (void))]
+           [elim (λ (x) (void))])
+    (solve termpairs s)))
 
 ;; unify: (term * term) -> subst
 (define (unify term1 term2)
-  (solve [(cons term1 term2)] []))
+  (solve (list (cons term1 term2)) '()))
 
 ;; match: term -> term -> subst
 ;; given a pattern (LHS) and object (input term), find a substitution that will match one to the other
