@@ -103,7 +103,8 @@
                                          (λ (e) (displayln (format "Timeout searching for RHS for ~a with insn count ~a"
                                                                    renamed-LHS (length (sketch-insn-list sk)))))])
                           (synthesize #:forall (cons tarvar non-tarvars)
-                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)
+                                                                       ))))])
       (unless (void? model)
         (if (unsat? model)
             (displayln (format "Could not find RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
@@ -146,10 +147,19 @@
                                                                     (halide->countops normalized-renamed-LHS) tar-idx)])
                      (if (eq? 'fail synthed-rule)
                          (displayln (format "Could not find valid RHS for ~a" normalized-renamed-LHS))
-                         (displayln (format "FOUND RULE: ~a -> ~a" (termIR->halide (rule-lhs synthed-rule)) (termIR->halide (rule-rhs synthed-rule)))))
-            )))
-        ))))
+                         (displayln (format "FOUND RULE: ~a -> ~a" (termIR->halide (rule-lhs synthed-rule))
+                                            (termIR->halide (rule-rhs synthed-rule))))))
+            )
+        )))))
 
+;; placeholders in the branches, don't commit!
+(define (find-rules patts originalTRS)
+  (letrec ([f (λ (patts current-patts TRS)
+                (cond [(and (empty? patts) (current-patts)) TRS]
+                      [(empty? current-patts) '()];; process an input pattern into a candidate LHS
+                      [else '()]))]) ;; take a candidate LHS and try & find a rule
+    (f patts '() originalTRS)))
+                      
 (define patts (list
 (cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))
 (cons "((x/y)/z)" (λ (x y z) (hld-div (hld-div x y) z)))
@@ -264,5 +274,5 @@
             (displayln (format "~a with target variable ~a normalized to ~a"
                                patt tvar (termIR->halide normalized-patt))))))))
 
-(for ([lhs-pair patts])
+#;(for ([lhs-pair patts])
   (find-rule (car lhs-pair)))
