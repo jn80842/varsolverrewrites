@@ -1,7 +1,8 @@
 #lang racket
 
 (provide (struct-out sigma-term))
-(provide term-constant? term-variable? termIR->halide termIR->variables)
+(provide term-constant? term-variable? termIR->halide
+         termIR->variables termIR->in-solved-form?)
 
 (struct vname (str int) #:transparent)
 
@@ -41,6 +42,9 @@
                                                                                  (f (list-ref (sigma-term-term-list tprime) 2)))]
                       [(and (sigma-term? tprime)
                             (equal? (sigma-term-symbol tprime) '!)) (format "!(~a)" (f (list-ref (sigma-term-term-list tprime) 0)))]
+                      [(and (sigma-term? tprime)
+                            (equal? (sigma-term-symbol tprime) 'or)) (format "(~a || ~a)" (f (list-ref (sigma-term-term-list tprime) 0))
+                                                                            (f (list-ref (sigma-term-term-list tprime) 1)))]
                       [else (format "(~a ~a ~a)"
                                    (f (list-ref (sigma-term-term-list tprime) 0))
                                    (sigma-term-symbol tprime)
@@ -53,3 +57,12 @@
                       [(sigma-term? tprime) (flatten (map f (sigma-term-term-list tprime)))]
                       [else '()]))])
     (set->list (list->set (f t)))))
+
+(define (is-target-variable? v)
+  (string-prefix? v "t"))
+
+(define (termIR->in-solved-form? term tvar)
+  (or (andmap (λ (v) (not (equal? tvar v))) (termIR->variables term))
+      (and (sigma-term? term)
+           (and (equal? (list-ref (sigma-term-term-list term) 0) tvar)
+                (andmap (λ (v) (not (equal? tvar v))) (flatten (map termIR->variables (cdr (sigma-term-term-list term)))))))))

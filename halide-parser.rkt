@@ -35,22 +35,25 @@
            ;; and try to start over right after the error
            [(error start) $2]
            [(exp) $1])
+    (boolvar [(UINT VAR) $2]
+             [(UINT VAR) $2])
 
     (exp [(NUM) $1]
          [(VAR) (symbol->string $1)]
          [(TVAR) (symbol->string $1)]
          [(NTVAR) (symbol->string $1)]
+         [(boolvar) (symbol->string $1)]
          [(TRUE) "true"] ;; need to add a boolean type
          [(FALSE) "false"]
          [(UINT1) "true"]
          [(UINT0) "false"]
-         [(exp EQ exp) (sigma-term '= (list $1 $3))]
+         [(exp EQ exp) (sigma-term '== (list $1 $3))]
          [(exp NEQ exp) (sigma-term '!= (list $1 $3))]
          [(MAX OP exp COMMA exp CP) (sigma-term 'max (list $3 $5))]
          [(MIN OP exp COMMA exp CP) (sigma-term 'min (list $3 $5))]
          [(SELECT OP exp COMMA exp COMMA exp CP) (sigma-term 'select (list $3 $5 $7))]
          [(exp AND exp) (sigma-term '&& (list $1 $3))]
-         [(exp OR exp) (sigma-term '|| (list $1 $3))]
+         [(exp OR exp) (sigma-term 'or (list $1 $3))]
          [(exp + exp) (sigma-term '+ (list $1 $3))]
          [(exp - exp) (sigma-term '- (list $1 $3))]
          [(exp * exp) (sigma-term '* (list $1 $3))]
@@ -62,7 +65,8 @@
          [(exp LE exp) (sigma-term '<= (list $1 $3))]
          [(! OP exp CP) (sigma-term '! (list $3))]
          [(OP exp CP) $2]
-         [(LII exp) $2]))))
+         [(LII exp) $2]
+         [(LIKELY OP exp CP) $3]))))
 
 (define halide->solvedform-parser
   (parser

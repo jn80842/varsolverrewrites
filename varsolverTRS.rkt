@@ -118,14 +118,10 @@
   (for/list ([r originalvarsolverTRS-halide])
     (rule (halide->termIR (first r)) (halide->termIR (second r)) (third r))))
 
-(define input-halidestr "(max(min((x*y) + z, z + (x*y)), (x*y) + z) - min(min((x*y) + z, z + (x*y)), (x*y) + z))")
-(define input-termIR (halide->termIR input-halidestr))
-;; expected output: ((x*(y - y)) + (z - z))
+(define (normalize input-halidestr tvar)
+  (termIR->halide (varsolver-rewrite* tvar originalvarsolverTRS (halide->termIR input-halidestr) rule->halide-string)))
 
-(define (normalize halidestr tvar)
-  (termIR->halide (varsolver-rewrite* tvar originalvarsolverTRS (halide->termIR input-halidestr))))
-
-(define (normalize->termIR halidestr tvar)
+(define (normalize->termIR input-halidestr tvar)
   (varsolver-rewrite* tvar originalvarsolverTRS (halide->termIR input-halidestr)))
 
 ;; order checking
@@ -226,3 +222,17 @@
     (if (non-empty-string? (rule-name r))
         (format "~a -> ~a (~a) [~a]" (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) (rule-name r) order-string)
         (format "~a -> ~a [~a]" (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) order-string))))
+
+(define (benchmark-TRS TRS)
+  (with-input-from-file "benchmarks.txt"
+                  (thunk
+                   (define solved-count 0)
+                    (for ([e (in-lines)])
+                      (begin
+                        (displayln (format "INPUT: ~a" e))
+                       (let ([normalizedIR (varsolver-rewrite* "x" TRS (halide->termIR e))])
+                        (if (termIR->in-solved-form? normalizedIR "x")
+                            (begin (displayln (format "SOLVED: ~a to ~a" e (termIR->halide normalizedIR)))
+                                   (set! solved-count (add1 solved-count)))
+                            (displayln (format "NOT SOLVED: ~a to ~a" e (termIR->halide normalizedIR))))))
+                    (displayln (format "benchmarks solved: ~a" solved-count))))))
