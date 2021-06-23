@@ -2,6 +2,10 @@
 
 (provide (all-defined-out))
 
+(define (hld-true? x)
+  (or (and (boolean? x) x)
+      (and (integer? x) (not (equal? x 0)))))
+
 (define (div-in-Z-val x y)
   (if (= (modulo x y) 0) 0 1))
 
@@ -171,26 +175,34 @@
       (if i1 i2 i3)
       'error))
 
-(define (hld-and i1 i2 [i3 #f])
+#;(define (hld-and i1 i2 [i3 #f])
   (if (and (boolean? i1) (boolean? i2))
       (and i1 i2)
       'error))
 
+(define (hld-and i1 i2 [i3 #f])
+  (and (hld-true? i1) (hld-true? i2)))
+
 (define (hld-and->string i1 i2 [i3 ""])
   (format "(~a && ~a)" i1 i2))
 
-(define (hld-or i1 i2 [i3 #f])
+#;(define (hld-or i1 i2 [i3 #f])
   (if (and (boolean? i1) (boolean? i2))
       (or i1 i2)
       'error))
+(define (hld-or i1 i2 [i3 #f])
+  (or (hld-true? i1) (hld-true? i2)))
 
 (define (hld-or->string i1 i2 [i3 #f])
   (format "(~a || ~a)" i1 i2))
 
-(define (hld-not i1 [i2 #f] [i3 #f])
+#;(define (hld-not i1 [i2 #f] [i3 #f])
   (if (boolean? i1)
       (not i1)
       'error))
+
+(define (hld-not i1 [i2 #f] [i3 #f])
+  (not (hld-true? i1)))
 
 (define (hld-not->string i1 [i2 ""] [i3 ""])
   (format "!(~a)" i1))

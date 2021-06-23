@@ -191,3 +191,11 @@
 
 #;(for ([r (rule-search "patterns/2varpatterns.txt" '())])
   (displayln (rule->halide-string r)))
+
+(define 1var-rules
+  (list
+   (make-rule (halide->termIR "(t0 - t0)") 0)
+   (make-rule (halide->termIR "(t0 >= t0)") 'true)
+   (make-rule (halide->termIR "(t0 || t0)") 'true)
+   (make-rule (halide->termIR "max(t0, t0)") "t0")
+   (make-rule (halide->termIR "min(t0, t0)") "t0")))
