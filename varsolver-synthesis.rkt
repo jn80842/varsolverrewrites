@@ -43,51 +43,12 @@
 
 (define-symbolic* sym-tarvar integer?)
 
-#;(define (synthesize-topn-rewrite LHS sk op-idx tarvar inputs)
-  (let* ([evaled-sketch (apply (get-topn-sketch-function sk op-idx) tarvar inputs)]
-         [evaled-LHS (apply LHS tarvar inputs)]
-         [model (time (synthesize #:forall (symbolics (cons tarvar inputs))
-                                  #:guarantee (assert (equal? evaled-sketch evaled-LHS))))])
-    (if (unsat? model)
-        (displayln "Could not find equivalent RHS")
-        (displayln (print-topn-sketch (evaluate sk model) (evaluate op-idx model))))))
-
 (define (pull-out-target-var var-list target-idx)
   (let ([size (length var-list)])
     (append (list (list-ref var-list target-idx)) (take var-list target-idx) (drop var-list (add1 target-idx)))))
 
 (define (insert-target-var nv-list tarvar target-idx)
   (append (take nv-list target-idx) (list tarvar) (drop nv-list target-idx)))
-
-;; assumptions:
-;; LHS contains 3 variables
-(define (synthesize-3var-rewrite LHS-string LHS-func tar-idx)
-  (let* ([op-count (halide->countops LHS-string)]
-         [LHS-termIR (halide->termIR LHS-string)]
-         [LHS-variables (termIR->variables LHS-termIR)]
-         [non-target-variables (for/list ([i (range (sub1 (length LHS-variables)))]) (format "n~a" i))]
-         [sk (get-symbolic-sketch operator-list 2 op-count)]
-         [renamed-LHS (halide->renamevars LHS-string (make-hash (map cons (list "x" "y" "z")
-                                                                     (insert-target-var (list "n0" "n1") "t0" tar-idx))))])
-    (if (halide-expr-in-solved-form? renamed-LHS)
-        (displayln (format "Candidate LHS already in solved form: ~a" renamed-LHS))
-        (begin
-          (clear-asserts!)
-          (define-symbolic* tarvar integer?)
-          (define-symbolic* n0 integer?)
-          (define-symbolic* n1 integer?)
-          (define-symbolic* root-op integer?)
-          (let* ([evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar (list n0 n1))]
-                 [evaled-LHS (apply LHS-func (insert-target-var (list n0 n1) tarvar tar-idx))]
-                 [model (time (with-handlers ([(λ (e) #t)
-                                               (λ (e) (displayln (format "Timeout in search for RHS for ~a" renamed-LHS)))])
-                                (synthesize #:forall (list tarvar n0 n1)
-                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
-            (if (or (unsat? model) (void? model))
-                (displayln (format "Could not find equivalent RHS for ~a" renamed-LHS))
-                (displayln (format "rewrite(~a, ~a);" renamed-LHS
-                                   (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))
-          ))))
 
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
@@ -107,161 +68,106 @@
                                                                        ))))])
       (unless (void? model)
         (if (unsat? model)
-            (displayln (format "Could not find RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
+            (displayln (format "Could not find topn RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
             (begin
            ;   (displayln (format "Found rule ~a -> ~a" renamed-LHS (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))
               (make-rule (halide->termIR renamed-LHS) (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))))))
 
-(define (synth-over-insn-count-range LHS inputs insn-count tar-idx)
+(define (synth-topn-over-insn-count-range LHS inputs insn-count tar-idx)
   (letrec ([f (λ (i)
                 (if (> i insn-count)
                     'fail
-                    (let* ([sk (get-symbolic-sketch operator-list (length inputs) i)]
+                    (let* ([sk (get-symbolic-sketch operator-list (sub1 (length inputs)) i)]
                            [rule (synthesize-topn-rewrite LHS inputs sk tar-idx)])
                       (if (void? rule)
                           (f (add1 i))
                           rule))))])
     (f 0)))
 
-;; note: we search for rules for any selection of target var from the variables in pattern
-;; thus it's possible to learn rules that will not apply to the original input
-(define (find-rule patt)
-  (let ([LHS-variables (termIR->variables (halide->termIR patt))])
-    ;; for each choice of target variable in pattern
-    (for ([tar-idx (range (length LHS-variables))])
-      (let* ([input-count (length LHS-variables)]
-             [renamed-variablesprime (insert-target-var (for/list ([i (range (sub1 input-count))])
-                                                          (format "n~a" (+ i input-count)))
-                                                        "t1" tar-idx)]
-             [renamed-variables (insert-target-var (for/list ([i (range (sub1 input-count))])
-                                                     (format "n~a" i)) "t0" tar-idx)]
-             [renamed-LHSprime (halide->renamevars patt (make-hash (map cons LHS-variables renamed-variablesprime)))]
-             [normalized-LHSprime (termIR->halide (varsolver-rewrite* "t1" originalvarsolverTRS (halide->termIR renamed-LHSprime)))]
-             [normalized-renamed-LHS (halide->renamevars normalized-LHSprime (make-hash (map cons renamed-variablesprime
-                                                                                             renamed-variables)))])
-        (if (halide-expr-in-solved-form? normalized-renamed-LHS)
-            (displayln (format "In solved form: ~a" normalized-renamed-LHS))
-            (begin (displayln (format "Ready for synthesis: ~a" normalized-renamed-LHS))
-                   ;; attempt to synth a RHS in t op E format, where E has from 1 to (LHS op count) insn
-                   (let ([synthed-rule (synth-over-insn-count-range normalized-renamed-LHS renamed-variables
-                                                                    (halide->countops normalized-renamed-LHS) tar-idx)])
-                     (if (eq? 'fail synthed-rule)
-                         (displayln (format "Could not find valid RHS for ~a" normalized-renamed-LHS))
-                         (displayln (format "FOUND RULE: ~a -> ~a" (termIR->halide (rule-lhs synthed-rule))
-                                            (termIR->halide (rule-rhs synthed-rule))))))
-            )
-        )))))
+;; assume that target variable is first in LHS-inputs
+(define (synthesize-nonly-rewrite renamed-LHS LHS-inputs sk)
+  (begin
+    (clear-asserts!)
+    (define-symbolic* tarvar integer?)
+    (let* ([non-tarvars (for/list ([i (range (sketch-input-count sk))]) (get-sym-int))]
+           [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
+           [evaled-LHS (apply (termIR->function (halide->termIR renamed-LHS) LHS-inputs) tarvar non-tarvars)]
+           [model (time (with-handlers ([(λ (e) #t)
+                                         (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
+                                                                   renamed-LHS (length (sketch-insn-list sk)))))])
+                          (synthesize #:forall (cons tarvar non-tarvars)
+                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+      (unless (void? model)
+        (if (unsat? model)
+            (displayln (format "Could not find n-only RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
+            (make-rule (halide->termIR renamed-LHS) (halide->termIR (sketch->halide-expr (evaluate sk model) (cdr LHS-inputs)))))))))
 
-;; placeholders in the branches, don't commit!
+(define (synth-nonly-over-insn-count-range LHS inputs insn-count)
+  (letrec ([f (λ (i)
+                (if (> i insn-count)
+                    'fail
+                    (let ([rule (synthesize-nonly-rewrite LHS inputs
+                                                          (get-symbolic-sketch operator-list (sub1 (length inputs)) i))])
+                      (if (void? rule)
+                          (f (add1 i))
+                          rule))))])
+    (f 0)))
+
+(define (verify-RHS-is-target-variable? renamed-LHS LHS-inputs)
+  (clear-asserts!)
+  (define-symbolic* tarvar integer?)
+  (let* ([non-tarvars (for/list ([i (range (sub1 (length LHS-inputs)))]) (get-sym-int))]
+         [evaled-LHS (apply (termIR->function renamed-LHS LHS-inputs) tarvar non-tarvars)]
+         [cex (verify (assert (equal? evaled-LHS tarvar)))])
+    (unsat? cex)))
+
+;; assume input pattern is normalized and not in solved form
+(define (find-rule patt tvar)
+  (let* ([pattIR (halide->termIR patt)]
+         [LHS-variables (termIR->variables pattIR)]
+         [renamed-LHS-variables (cons "t0" (for/list ([i (range (sub1 (length LHS-variables)))])
+                                                                                (format "n~a" i)))]
+         [candidate-LHS (termIR->renamevars pattIR (make-hash (map cons (cons tvar (remove tvar LHS-variables))
+                                                                   renamed-LHS-variables)))])
+    (if (verify-RHS-is-target-variable? candidate-LHS renamed-LHS-variables)
+        (make-rule candidate-LHS "t0")
+        (if (equal? (length renamed-LHS-variables) 1)
+            (begin
+              (displayln (format "No possible equivalent RHS in form t op N for ~a" patt))
+              'fail)
+            (let ([nonly-rule (synth-nonly-over-insn-count-range (termIR->halide candidate-LHS) renamed-LHS-variables
+                                                                 (halide->countops (termIR->halide candidate-LHS)))])
+              (if (not (equal? 'fail nonly-rule))
+                  nonly-rule
+                  (synth-topn-over-insn-count-range (termIR->halide candidate-LHS) renamed-LHS-variables
+                                                    (halide->countops (termIR->halide candidate-LHS)) 0)))))))
+
+;; assume input patterns have target variable x
 (define (find-rules patts originalTRS)
-  (letrec ([f (λ (patts current-patts TRS)
-                (cond [(and (empty? patts) (current-patts)) TRS]
-                      [(empty? current-patts) '()];; process an input pattern into a candidate LHS
-                      [else '()]))]) ;; take a candidate LHS and try & find a rule
-    (f patts '() originalTRS)))
-                      
-(define patts (list
-(cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))
-(cons "((x/y)/z)" (λ (x y z) (hld-div (hld-div x y) z)))
-(cons "(x/(y/z))" (λ (x y z) (hld-div x (hld-div y z))))
-(cons "((x*y)*z)" (λ (x y z) (hld-mul (hld-mul x y) z)))
-(cons "((x/y)*z)" (λ (x y z) (hld-mul (hld-div x y) z)))
-(cons "(x + (y*z))" (λ (x y z) (hld-add x (hld-mul y z))))
-(cons "((x/y) + z)" (λ (x y z) (hld-add (hld-div x y) z)))
-(cons "((x - y)/z)" (λ (x y z) (hld-div (hld-sub x y) z)))
-(cons "min(x*y, z)" (λ (x y z) (min (hld-mul x y) z)))
-(cons "((x*y) + z)" (λ (x y z) (hld-add (hld-mul x y) z)))
-(cons "((x + y)/z)" (λ (x y z) (hld-div (hld-add x y) z)))
-(cons "((x % y)*z)" (λ (x y z) (hld-mul (hld-mod x y) z)))
-(cons "((x/y) < z)" (λ (x y z) (hld-lt (hld-div x y) z)))
-(cons "(x*(y + z))" (λ (x y z) (hld-mul x (hld-add y z))))
-(cons "((x + y)*z)" (λ (x y z) (hld-mul (hld-add x y) z)))
-(cons "((x - y)*z)" (λ (x y z) (hld-mul (hld-sub x y) z)))
-(cons "(x - (y/z))" (λ (x y z) (hld-sub x (hld-div y z))))
-(cons "((x*y) - z)" (λ (x y z) (hld-sub (hld-mul x y) z)))
-(cons "(x + (y/z))" (λ (x y z) (hld-add x (hld-div y z))))
-(cons "(x - (y*z))" (λ (x y z) (hld-sub x (hld-mul y z))))
-(cons "((x*y) + z)" (λ (x y z) (hld-add (hld-mul x y) z)))
-(cons "((x/y) - z)" (λ (x y z) (hld-sub (hld-div x y) z)))
-(cons "(x + (y*z))" (λ (x y z) (hld-add x (hld-mul y z))))
-(cons "((x/y) + z)" (λ (x y z) (hld-add (hld-div x y) z)))
-(cons "min(x, y/z)" (λ (x y z) (min x (hld-div y z))))
-(cons "max(x*y, z)" (λ (x y z) (max (hld-mul x y) z)))
-(cons "min(x/y, z)" (λ (x y z) (min (hld-div x y) z)))
-(cons "max(x, y/z)" (λ (x y z) (max x (hld-div y z))))
-(cons "max(x/y, z)" (λ (x y z) (max (hld-div x y) z)))
-(cons "(x < (y/z))" (λ (x y z) (hld-lt x (hld-div y z))))
-(cons "min(x, y*z)" (λ (x y z) (min x (hld-mul y z))))
-(cons "(x < (y*z))" (λ (x y z) (hld-lt x (hld-mul y z))))
-(cons "((x + y)/z)" (λ (x y z) (hld-div (hld-add x y) z)))
-(cons "max(x, y*z)" (λ (x y z) (max x (hld-mul y z))))
-(cons "(x/(y + z))" (λ (x y z) (hld-div x (hld-add y z))))
-(cons "((x/y) % z)" (λ (x y z) (hld-mod (hld-div x y) z)))
-(cons "(x % (y/z))" (λ (x y z) (hld-mod x (hld-div y z))))
-(cons "((x + y)*z)" (λ (x y z) (hld-mul (hld-add x y) z)))
-(cons "((x*y) < z)" (λ (x y z) (hld-lt (hld-mul x y) z)))
-(cons "(x*(y - z))" (λ (x y z) (hld-mul x (hld-sub y z))))
-(cons "(x <= (y/z))" (λ (x y z) (hld-le x (hld-div y z))))
-(cons "(x <= (y*z))" (λ (x y z) (hld-le x (hld-mul y z))))
-(cons "(x <= (y/z))" (λ (x y z) (hld-le x (hld-div y z))))
-(cons "(x <= (y*z))" (λ (x y z) (hld-le x (hld-mul y z))))
-(cons "!((x/y) < z)" (λ (x y z) (hld-not (hld-lt (hld-div x y) z))))
-(cons "((x/y) <= z)" (λ (x y z) (hld-le (hld-div x y) z)))
-(cons "((x/y) >= z)" (λ (x y z) (hld-ge (hld-div x y) z)))
-(cons "((x*y) >= z)" (λ (x y z) (hld-ge (hld-mul x y) z)))
-(cons "((x*y) <= z)" (λ (x y z) (hld-le (hld-mul x y) z)))
-(cons "(x >= (y*z))" (λ (x y z) (hld-ge x (hld-mul y z))))
-(cons "!(x < (y/z))" (λ (x y z) (hld-not (hld-lt x (hld-div y z)))))
-(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
-(cons "(x - (y % z))" (λ (x y z) (hld-sub x (hld-mod y z))))
-(cons "((x + y) % z)" (λ (x y z) (hld-mod (hld-add x y) z)))
-(cons "min(x, y + z)" (λ (x y z) (min x (hld-add y z))))
-(cons "(x + (y + z))" (λ (x y z) (hld-add x (hld-add y z))))
-(cons "((x + y) < z)" (λ (x y z) (hld-lt (hld-add x y) z)))
-(cons "max(x + y, z)" (λ (x y z) (max (hld-add x y) z)))
-(cons "((x + y) - z)" (λ (x y z) (hld-sub (hld-add x y) z)))
-(cons "(x < (y % z))" (λ (x y z) (hld-lt x (hld-mod y z))))
-(cons "(x + (y - z))" (λ (x y z) (hld-add x (hld-sub y z))))
-(cons "((x + y) < z)" (λ (x y z) (hld-lt (hld-add x y) z)))
-(cons "!(x <= (y/z))" (λ (x y z) (hld-not (hld-le x (hld-div y z)))))
-(cons "(x < (y + z))" (λ (x y z) (hld-lt x (hld-add y z))))
-(cons "((x % y) < z)" (λ (x y z) (hld-lt (hld-mod x y) z)))
-(cons "((x - y) + z)" (λ (x y z) (hld-add (hld-sub x y) z)))
-(cons "(x - (y - z))" (λ (x y z) (hld-sub x (hld-sub y z))))
-(cons "max(x, y + z)" (λ (x y z) (max x (hld-add y z))))
-(cons "min(x, y - z)" (λ (x y z) (min x (hld-sub y z))))
-(cons "max(x - y, z)" (λ (x y z) (max (hld-sub x y) z)))
-(cons "min(x - y, z)" (λ (x y z) (min (hld-sub x y) z)))
-(cons "min(x + y, z)" (λ (x y z) (min (hld-add x y) z)))
-(cons "((x - y) - z)" (λ (x y z) (hld-sub (hld-sub x y) z)))
-(cons "(x - (y + z))" (λ (x y z) (hld-sub x (hld-add y z))))
-(cons "(x + (y + z))" (λ (x y z) (hld-add x (hld-add y z))))
-(cons "(max(x, y)*z)" (λ (x y z) (hld-mul (max x y) z)))
-(cons "(min(x, y)*z)" (λ (x y z) (hld-mul (min x y) z)))
-(cons "(min(x, y)/z)" (λ (x y z) (hld-div (min x y) z)))
-(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
-(cons "(((x/y)/z)*z)" (λ (x y z) (hld-mul (hld-div (hld-div x y) z) z)))
-(cons "min((x*y), z)" (λ (x y z) (min (hld-mul x y) z)))
-(cons "min(x/y, z/y)" (λ (x y z) (min (hld-div x y) (hld-div z y))))
-(cons "min(x*y, z*y)" (λ (x y z) (min (hld-mul x y) (hld-mul z y))))
-(cons "((x % y) + z)" (λ (x y z) (hld-add (hld-mod x y) z)))
-(cons "(x % (y + z))" (λ (x y z) (hld-mod x (hld-add y z))))
-(cons "(max(x, y)/z)" (λ (x y z) (hld-div (max x y) z)))
-(cons "min((x), y/z)" (λ (x y z) (min x (hld-div y z))))
-(cons "max(x*y, z*y)" (λ (x y z) (max (hld-mul x y) (hld-mul z y))))
-(cons "(((x/y)/y)*z)" (λ (x y z) (hld-mul (hld-div (hld-div x y) y) z)))
-(cons "max(x, y - z)" (λ (x y z) (max x (hld-sub y z))))
-(cons "((x % y) - z)" (λ (x y z) (hld-sub (hld-mod x y) z)))
-(cons "((x + y) + z)" (λ (x y z) (hld-add (hld-add x y) z)))
-(cons "max(x/y, z/y)" (λ (x y z) (max (hld-div x y) (hld-div z y))))
-(cons "((x + y) <= z)" (λ (x y z) (hld-le (hld-add x y) z)))
-(cons "(x <= (y + z))" (λ (x y z) (hld-le x (hld-add y z))))
-(cons "((x - y) <= z)" (λ (x y z) (hld-le (hld-sub x y) z)))
-(cons "((x + y) <= z)" (λ (x y z) (hld-le (hld-add x y) z)))
-(cons "(x || (y < z))" (λ (x y z) (hld-or x (hld-lt y z))))
-(cons "!(x < (y + z))" (λ (x y z) (hld-not (hld-lt x (hld-add y z)))))
-(cons "!((x + y) < z)" (λ (x y z) (hld-not (hld-lt (hld-add x y) z))))
-))
+  (letrec ([f (λ (patterns TRS)
+                (if (empty? patterns)
+                    TRS
+                    (begin
+                      (displayln (format "Searching for rule for input ~a" (car patterns)))
+                      (let ([e (varsolver-rewrite* "x" TRS (halide->termIR (car patterns)) rule->halide-string)])
+                      (if (termIR->in-solved-form? e "x")
+                          (begin
+                            (displayln (format "Input ~a was solved by TRS" (car patterns)))
+                            (f (cdr patterns) TRS))
+                          (let ([candidate-rule (find-rule (termIR->halide e) "x")])
+                            (if (equal? 'fail candidate-rule)
+                                (begin
+                                  (displayln (format "Could not find RHS for input ~a" (car patterns)))
+                                  (f (cdr patterns) TRS))
+                                (if (equal? (rule-lhs candidate-rule) (rule-rhs candidate-rule))
+                                    (begin
+                                      (displayln (format "Synthesized same RHS as LHS: ~a" (rule-lhs candidate-rule)))
+                                      (f (cdr patterns) TRS))
+                                    (begin
+                                      (displayln (format "FOUND NEW RULE: ~a -> ~a" (termIR->halide (rule-lhs candidate-rule))
+                                                         (termIR->halide (rule-rhs candidate-rule))))
+                                      (f (cdr patterns) (append TRS (list candidate-rule))))))))))))])
+    (f patts originalTRS)))
 
 (define (check-patt patt tar-idx)
   (let ([renamed-patt (halide->renamevars patt (make-hash (map cons (list "x" "y" "z")
@@ -276,3 +182,12 @@
 
 #;(for ([lhs-pair patts])
   (find-rule (car lhs-pair)))
+
+(define (rule-search filename initTRS)
+  (with-input-from-file filename
+                  (thunk
+                   (let ([patterns (for/list ([e (in-lines)]) e)])
+                      (find-rules patterns '())))))
+
+#;(for ([r (rule-search "patterns/2varpatterns.txt" '())])
+  (displayln (rule->halide-string r)))

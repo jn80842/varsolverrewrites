@@ -237,8 +237,8 @@
         and-operator ;; 15
         or-operator ;; 16
         not-operator ;; 17
-        seli-operator ;; 18
-        selb-operator ;; 19
+      ;  seli-operator ;; 18
+      ;  selb-operator ;; 19
         ))
 
 (define cheap-operator-list

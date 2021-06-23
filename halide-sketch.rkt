@@ -69,8 +69,8 @@
         and-operator ;; 15
         or-operator ;; 16
         not-operator ;; 17
-        seli-operator ;; 18
-        selb-operator ;; 19
+    ;    seli-operator ;; 18
+    ;    selb-operator ;; 19
         ))
 
 (define variable-list (list "x" "y" "z"))
@@ -84,14 +84,14 @@
                                (cons 'max hld-max)
                                (cons 'min hld-min)
                                (cons 'select hld-seli)
-                               (cons '= hld-eqi)
+                               (cons '== hld-eqi)
                                (cons '!= hld-neqi)
                                (cons '< hld-lt)
                                (cons '> hld-gt)
                                (cons '<= hld-le)
                                (cons '>= hld-ge)
                                (cons '&& hld-and)
-                               (cons '|| hld-or)
+                               (cons 'or hld-or)
                                (cons '! hld-not))))
 
 ;; takes a termIR expression and returns a function

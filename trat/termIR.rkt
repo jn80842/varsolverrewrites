@@ -2,7 +2,7 @@
 
 (provide (struct-out sigma-term))
 (provide term-constant? term-variable? termIR->halide
-         termIR->variables termIR->in-solved-form?)
+         termIR->variables termIR->in-solved-form? termIR->renamevars)
 
 (struct vname (str int) #:transparent)
 
@@ -62,7 +62,15 @@
   (string-prefix? v "t"))
 
 (define (termIR->in-solved-form? term tvar)
-  (or (andmap (λ (v) (not (equal? tvar v))) (termIR->variables term))
+  (or (and (term-variable? term) (equal? term tvar))
+      (andmap (λ (v) (not (equal? tvar v))) (termIR->variables term))
       (and (sigma-term? term)
            (and (equal? (list-ref (sigma-term-term-list term) 0) tvar)
                 (andmap (λ (v) (not (equal? tvar v))) (flatten (map termIR->variables (cdr (sigma-term-term-list term)))))))))
+
+(define (termIR->renamevars term varmap)
+  (letrec ([f (λ (tprime)
+                (cond [(term-variable? tprime) (hash-ref varmap tprime)]
+                      [(term-constant? tprime) tprime]
+                      [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
+    (f term)))

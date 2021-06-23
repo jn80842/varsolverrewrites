@@ -89,7 +89,8 @@
            [(OP targetvar binop nt-exp CP) #t]
            [(binop targetvar nt-exp) #t]
            [(OP binop targetvar nt-exp CP) #t]
-           [(nt-exp) #t])
+           [(nt-exp) #t]
+           [(TVAR) #t])
     (targetvar [(TVAR) #t])
     (binop [(EQ) #t]
            [(MAX) #t]

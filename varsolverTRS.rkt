@@ -7,7 +7,7 @@
 (provide originalvarsolverTRS normalize normalize->termIR
          tvar-count-reduction-order? tvar-count-reduction-order-equal?
          move-tvar-left-reduction-order? move-tvar-left-reduction-order-equal?
-         move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal?)
+         move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal? rule->halide-string)
 
 ;; commented out original rules that don't obey reduction order
 (define originalvarsolverTRS-halide (list
@@ -218,7 +218,7 @@
       (hash-set! originalvarsolver-orders (rule-name r) (cons 'left (hash-ref originalvarsolver-orders (rule-name r))))))
 
 (define (rule->halide-string r)
-  (let ([order-string (string-join (map symbol->string (hash-ref originalvarsolver-orders (rule-name r))))])
+  (let ([order-string (string-join (map symbol->string (hash-ref originalvarsolver-orders (rule-name r) (list 'unknownorder))))])
     (if (non-empty-string? (rule-name r))
         (format "~a -> ~a (~a) [~a]" (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) (rule-name r) order-string)
         (format "~a -> ~a [~a]" (termIR->halide (rule-lhs r)) (termIR->halide (rule-rhs r)) order-string))))
