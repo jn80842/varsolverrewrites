@@ -187,7 +187,7 @@
   (with-input-from-file filename
                   (thunk
                    (let ([patterns (for/list ([e (in-lines)]) e)])
-                      (find-rules patterns '())))))
+                      (find-rules patterns initTRS)))))
 
 #;(for ([r (rule-search "patterns/2varpatterns.txt" '())])
   (displayln (rule->halide-string r)))
