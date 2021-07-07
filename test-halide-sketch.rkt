@@ -1,7 +1,7 @@
 #lang rosette
 
 (require rackunit)
-(require "trat/termIR.rkt")
+(require "traat/termIR.rkt")
 (require "halide-sketch.rkt")
 
 ;; this is definitely failing

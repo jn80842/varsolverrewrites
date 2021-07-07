@@ -1,8 +1,8 @@
 #lang racket
 
 (require "halide-parser.rkt")
-(require "trat/termIR.rkt")
-(require "trat/matching.rkt")
+(require "traat/termIR.rkt")
+(require "traat/matching.rkt")
 
 (provide originalvarsolverTRS normalize normalize->termIR
          tvar-count-reduction-order? tvar-count-reduction-order-equal?

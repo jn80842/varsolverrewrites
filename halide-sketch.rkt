@@ -1,7 +1,7 @@
 #lang rosette
 
 (require "halide-lang.rkt")
-(require "trat/termIR.rkt")
+(require "traat/termIR.rkt")
 
 (provide (struct-out sketch)
          (struct-out insn))

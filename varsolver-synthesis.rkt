@@ -5,8 +5,8 @@
 (require "halide-print-sketch.rkt")
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
-(require "trat/termIR.rkt")
-(require "trat/matching.rkt")
+(require "traat/termIR.rkt")
+(require "traat/matching.rkt")
 
 ;; assume LHS is a function that takes the same inputs as the RHS sketch
 (define (synthesize-rewrite LHS sk inputs)

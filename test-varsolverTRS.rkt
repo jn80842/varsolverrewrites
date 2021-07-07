@@ -1,7 +1,7 @@
 #lang racket
 
 (require rackunit)
-(require "trat/matching.rkt")
+(require "traat/matching.rkt")
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
 

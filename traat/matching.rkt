@@ -6,7 +6,7 @@
 (provide make-rule match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*
          is-tvar-matching? is-non-tvar-matching?
-         unify)
+         unify lift)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now

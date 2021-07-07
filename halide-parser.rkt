@@ -4,7 +4,7 @@
 
 (require "lexer.rkt")
 (require "halide-lang.rkt")
-(require "trat/termIR.rkt")
+(require "traat/termIR.rkt")
 
 (provide halide->rktlang
          halide->renamevars
