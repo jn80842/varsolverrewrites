@@ -194,8 +194,37 @@
 
 (define 1var-rules
   (list
-   (make-rule (halide->termIR "(t0 - t0)") 0)
-   (make-rule (halide->termIR "(t0 >= t0)") 'true)
-   (make-rule (halide->termIR "(t0 || t0)") 'true)
+   (make-rule (halide->termIR "(t0 - t0)") 0) ;; not in original rules
+   (make-rule (halide->termIR "(t0 >= t0)") 'true) ;; not in original rules
+   (make-rule (halide->termIR "(t0 || t0)") "t0")
    (make-rule (halide->termIR "max(t0, t0)") "t0")
    (make-rule (halide->termIR "min(t0, t0)") "t0")))
+
+(define batch1-rules
+  (list
+   (make-rule (halide->termIR "!((t0 < n0))") (halide->termIR "(t0 >= n0)"))
+(make-rule (halide->termIR "!((t0 <= n0))") (halide->termIR "(t0 > n0)"))
+(make-rule (halide->termIR "!((t0 == n0))") (halide->termIR "(t0 != n0)"))
+(make-rule (halide->termIR "((t0 * n0) * n1)") (halide->termIR "(t0 * (n0 * n1))"))
+(make-rule (halide->termIR "((t0 + n0) - n0)") (halide->termIR "t0"))
+(make-rule (halide->termIR "max(t0, (t0 + n0))") (halide->termIR "(t0 + max(n0, (n0 - n0)))"))
+(make-rule (halide->termIR "min((t0 + n0), t0)") (halide->termIR "(t0 + min((n0 - n0), n0))"))
+(make-rule (halide->termIR "(t0 - (t0 + n0))") (halide->termIR "((n0 - n0) - n0)"))
+(make-rule (halide->termIR "(t0 - (n0 + t0))") (halide->termIR "((n0 - n0) - n0)"))
+(make-rule (halide->termIR "(t0 + (n0 - t0))") (halide->termIR "n0"))
+(make-rule (halide->termIR "((t0 + n0) - t0)") (halide->termIR "n0"))
+(make-rule (halide->termIR "((t0 - n0) + n0)") (halide->termIR "t0"))
+(make-rule (halide->termIR "((t0 + n0) + n1)") (halide->termIR "(t0 + (n1 + n0))"))
+(make-rule (halide->termIR "((t0 + n0) < n1)") (halide->termIR "(t0 < (n1 - n0))"))
+(make-rule (halide->termIR "((t0 - n0) + n1)") (halide->termIR "(t0 + (n1 - n0))"))
+(make-rule (halide->termIR "((t0 - n0) - n1)") (halide->termIR "(t0 - (n1 + n0))"))
+(make-rule (halide->termIR "(t0 <= (t0 + n0))") (halide->termIR "(n0 <= (n0 + n0))"))
+(make-rule (halide->termIR "((t0 + n0) <= n1)") (halide->termIR "(t0 <= (n1 - n0))"))
+(make-rule (halide->termIR "((t0 - n0) <= n1)") (halide->termIR "(t0 <= (n1 + n0))"))
+(make-rule (halide->termIR "((t0 + n0) >= n1)") (halide->termIR "(t0 >= (n1 - n0))"))
+(make-rule (halide->termIR "((t0 - n0) >= n1)") (halide->termIR "(t0 >= (n1 + n0))"))
+(make-rule (halide->termIR "((t0 * n0) + (t0 * n1))") (halide->termIR "(t0 * (n0 + n1))"))
+(make-rule (halide->termIR "((t0 || n0) || n1)") (halide->termIR "(t0 || (n1 || n0))"))
+))
+
+(benchmark-TRS (append batch1-rules originalvarsolverTRS ))

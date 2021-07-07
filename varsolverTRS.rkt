@@ -7,7 +7,7 @@
 (provide originalvarsolverTRS normalize normalize->termIR
          tvar-count-reduction-order? tvar-count-reduction-order-equal?
          move-tvar-left-reduction-order? move-tvar-left-reduction-order-equal?
-         move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal? rule->halide-string)
+         move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal? rule->halide-string benchmark-TRS)
 
 ;; commented out original rules that don't obey reduction order
 (define originalvarsolverTRS-halide (list
@@ -103,6 +103,100 @@
 ;;(list "t0 >= t1" "(t0 - t1) >= 0" "vsge737")
 ))
 
+(define invalidorderedTRS-halide
+(list
+(list "n0 + t0" "t0 + n0" "vsadd133")
+(list "(t0 - n0) + n1" "t0 + (n1 - n0)" "vsadd152")
+(list "(t0 + n0) + n1" "t0 + (n0 + n1)" "vsadd155")
+(list "t0 + t0" "t0 * 2" "vsadd159")
+(list "(t0 + n0) + t1" "(t0 + t1) + n0" "vsadd162")
+(list "t0 + (t1 + n0)" "(t0 + t1) + n0" "vsadd165")
+(list "(t0 - n0) + t1" "(t0 + t1) - n0" "vsadd168")
+(list "t0 + (t1 - n0)" "(t0 + t1) - n0" "vsadd171")
+(list "(t0 * x) + (t0 * y)" "t0 * (x + y)" "vsadd174")
+(list "(t0 * x) + (t1 * x)" "(t0 + t1) * x" "vsadd177")
+(list "(t0 * x) + t0" "t0 * (x + 1)" "vsadd180")
+(list "t0 + (t0 * x)" "t0 * (x + 1)" "vsadd183")
+(list "(t0 - n1) - n0" "t0 - (n1 + n0)" "vssub240")
+(list "(t0 + n1) - n0" "t0 + (n1 - n0)" "vssub243")
+(list "n0 - (t0 - n1)" "(t0 * -1) + (n0 + n1)" "vssub257")
+(list "n0 - (t0 + n1)" "(t0 * -1) + (n0 - n1)" "vssub260")
+(list "n0 - t0" "(t0 * -1) + n0" "vssub262")
+(list "(t0 + n1) - t1" "(t0 - t1) + n1" "vssub267")
+(list "t0 - (t1 + n1)" "(t0 - t1) - n1" "vssub270")
+(list "(t0 - n1) - t1" "(t0 - t1) - n1" "vssub273")
+(list "t0 - (t1 - n1)" "(t0 - t1) + n1" "vssub276")
+(list "(t0 * x) - (t0 * y)" "t0 * (x - y)" "vssub279")
+(list "(t0 * x) - (t1 * x)" "(t0 - t1) * x" "vssub282")
+(list "n0 * t0" "t0 * n0" "vsmul326")
+(list "(t0 + n0) * n1" "t0 * n1 + n0 * n1" "vsmul339")
+(list "(t0 - n0) * n1" "t0 * n1 - n0 * n1" "vsmul342")
+(list "(t0 * n0) * n1" "t0 * (n0 * n1)" "vsmul345")
+(list "max(n0, t0)" "max(t0, n0)" "vsmax449")
+(list "max(t0, t0)" "t0" "vsmax473")
+(list "max(max(t0, n0), t1)" "max(max(t0, t1), n0)" "vsmax476")
+(list "max(t0, max(t1, n0))" "max(max(t0, t1), n0)" "vsmax479")
+(list "max(t0 + n0, t0 + n1)" "t0 + max(n0, n1)" "vsmax482")
+(list "max(t0 + n0, t1 + n0)" "max(t0, t1) + n0" "vsmax485")
+(list "max(t0 + n0, t0)" "t0 + max(n0, 0)" "vsmax488")
+(list "max(t0, t0 + n0)" "t0 + max(n0, 0)" "vsmax491")
+(list "max(t0 - n0, t1 - n0)" "max(t0, t1) - n0" "vsmax503")
+(list "max(t0 - n0, t0)" "t0 - min(n0, 0)" "vsmax506")
+(list "max(t0, t0 - n0)" "t0 - min(n0, 0)" "vsmax509")
+(list "min(n0, t0)" "min(t0, n0)" "vsmin449")
+(list "min(t0, t0)" "t0" "vsmin473")
+(list "min(min(t0, n0), t1)" "min(min(t0, t1), n0)" "vsmin476")
+(list "min(t0, min(t1, n0))" "min(min(t0, t1), n0)" "vsmin479")
+(list "min(t0 + n0, t0 + n1)" "t0 + min(n0, n1)" "vsmin482")
+(list "min(t0 + n0, t1 + n0)" "min(t0, t1) + n0" "vsmin485")
+(list "min(t0 + n0, t0)" "t0 + min(n0, 0)" "vsmin488")
+(list "min(t0, t0 + n0)" "t0 + min(n0, 0)" "vsmin491")
+(list "min(t0 - n0, t0 - n1)" "t0 - max(n0, n1)" "vsmin494")
+(list "min(t0 - n0, t0 + n1)" "t0 + min(0 - n0, n1)" "vsmin497")
+(list "min(t0 + n0, t0 - n1)" "t0 + min(n0, 0 - n1)" "vsmin500")
+(list "min(t0 - n0, t1 - n0)" "min(t0, t1) - n0" "vsmin503")
+(list "min(t0 - n0, t0)" "t0 - max(n0, 0)" "vsmin506")
+(list "min(t0, t0 - n0)" "t0 - max(n0, 0)" "vsmin509")
+(list "n0 && t0" "t0 && n0" "vsand564")
+(list "t0 && t0" "t0" "vsand582")
+(list "(t0 && n0) && t1" "(t0 && t1) && n0" "vsand585")
+(list "t0 && (t1 && n0)" "(t0 && t1) && n0" "vsand588")
+(list "n0 || t0" "t0 || n0" "vsor564")
+(list "t0 || t0" "t0" "vsor582")
+(list "(t0 || n0) || t1" "(t0 || t1) || n0" "vsor585")
+(list "t0 || (t1 || n0)" "(t0 || t1) || n0" "vsor588")
+(list "n0 == t0" "t0 == n0" "vseq636")
+(list "(t0 + n1) == n0" "t0 == (n0 - n1)" "vseq657")
+(list "(t0 - n1) == n0" "t0 == (n1 + n0)" "vseq660")
+(list "(t0 * -1) == n0" "t0 == (0 - n0)" "vseq670")
+(list "t0 == t1" "(t0 - t1) == 0" "vseq737")
+(list "n0 != t0" "t0 != n0" "vsne636")
+(list "(t0 + n1) != n0" "t0 != (n0 - n1)" "vsne657")
+(list "(t0 - n1) != n0" "t0 != (n1 + n0)" "vsne660")
+(list "(t0 * -1) != n0" "t0 != (0 - n0)" "vsne670")
+(list "t0 != t1" "(t0 - t1) != 0" "vsne737")
+(list "n0 < t0" "t0 > n0" "vslt636")
+(list "(t0 + n1) < n0" "t0 < (n0 - n1)" "vslt657")
+(list "(t0 - n1) < n0" "t0 < (n1 + n0)" "vslt660")
+(list "(t0 * -1) < n0" "t0 > (0 - n0)" "vslt670")
+(list "t0 < t1" "(t0 - t1) < 0" "vslt737")
+(list "n0 <= t0" "t0 >= n0" "vsle636")
+(list "(t0 + n1) <= n0" "t0 <= (n0 - n1)" "vsle657")
+(list "(t0 - n1) <= n0" "t0 <= (n1 + n0)" "vsle660")
+(list "(t0 * -1) <= n0" "t0 >= (0 - n0)" "vsle670")
+(list "t0 <= t1" "(t0 - t1) <= 0" "vsle737")
+(list "n0 > t0" "t0 < n0" "vsgt636")
+(list "(t0 + n1) > n0" "t0 > (n0 - n1)" "vsgt657")
+(list "(t0 - n1) > n0" "t0 > (n1 + n0)" "vsgt660")
+(list "(t0 * -1) > n0" "t0 < (0 - n0)" "vsgt670")
+(list "t0 > t1" "(t0 - t1) > 0" "vsgt737")
+(list "n0 >= t0" "t0 <= n0" "vsge636")
+(list "(t0 + n1) >= n0" "t0 >= (n0 - n1)" "vsge657")
+(list "(t0 - n1) >= n0" "t0 >= (n1 + n0)" "vsge660")
+(list "(t0 * -1) >= n0" "t0 <= (0 - n0)" "vsge670")
+(list "t0 >= t1" "(t0 - t1) >= 0" "vsge737")
+))
+
 (define targetedTRS
   (let ([rulelist (list (list "n0 + t0" "t0 + n0" "vsadd133")
                         (list "min(t0, t0)" "t0" "vsmin473")
@@ -114,9 +208,12 @@
     (for/list ([r rulelist])
       (rule (halide->termIR (first r)) (halide->termIR (second r)) (third r)))))
 
-(define originalvarsolverTRS
-  (for/list ([r originalvarsolverTRS-halide])
+(define (make-TRS halideTRS-list)
+  (for/list ([r halideTRS-list])
     (rule (halide->termIR (first r)) (halide->termIR (second r)) (third r))))
+
+(define originalvarsolverTRS (make-TRS originalvarsolverTRS-halide))
+(define invalidvarsolverTRS (make-TRS invalidorderedTRS-halide))
 
 (define (normalize input-halidestr tvar)
   (termIR->halide (varsolver-rewrite* tvar originalvarsolverTRS (halide->termIR input-halidestr) rule->halide-string)))
@@ -217,6 +314,27 @@
     (unless (not (move-tvar-left-reduction-order? r))
       (hash-set! originalvarsolver-orders (rule-name r) (cons 'left (hash-ref originalvarsolver-orders (rule-name r))))))
 
+(define varcount-reducing-TRS
+  (filter tvar-count-reduction-order? originalvarsolverTRS))
+
+(define movevarup-TRS
+  (filter move-tvar-up-reduction-order? originalvarsolverTRS))
+
+(define movevarleft-TRS
+  (filter move-tvar-left-reduction-order? originalvarsolverTRS))
+
+(define fewerandup-TRS
+  (filter (λ (r) (or (tvar-count-reduction-order? r)
+                     (move-tvar-up-reduction-order? r))) originalvarsolverTRS))
+
+(define fewerandleft-TRS
+  (filter (λ (r) (or (tvar-count-reduction-order? r)
+                     (move-tvar-left-reduction-order? r))) originalvarsolverTRS))
+
+(define upandleft-TRS
+  (filter (λ (r) (or (move-tvar-up-reduction-order? r)
+                     (move-tvar-left-reduction-order? r))) originalvarsolverTRS))
+
 (define (rule->halide-string r)
   (let ([order-string (string-join (map symbol->string (hash-ref originalvarsolver-orders (rule-name r) (list 'unknownorder))))])
     (if (non-empty-string? (rule-name r))
@@ -230,9 +348,13 @@
                     (for ([e (in-lines)])
                       (begin
                         (displayln (format "INPUT: ~a" e))
-                       (let ([normalizedIR (varsolver-rewrite* "x" TRS (halide->termIR e))])
+                       (let ([normalizedIR (varsolver-rewrite* "x" TRS (halide->termIR e) rule->halide-string)])
                         (if (termIR->in-solved-form? normalizedIR "x")
                             (begin (displayln (format "SOLVED: ~a to ~a" e (termIR->halide normalizedIR)))
                                    (set! solved-count (add1 solved-count)))
                             (displayln (format "NOT SOLVED: ~a to ~a" e (termIR->halide normalizedIR))))))
                     (displayln (format "benchmarks solved: ~a" solved-count))))))
+
+;;(benchmark-TRS (list (make-rule (halide->termIR "(t0 - t0)") 0) (make-rule (halide->termIR "(t0 >= t0)") 'true)))
+
+(define expr1 "((((x*16) + ((y/8)*8)) + -20) <= ((((y + 103)/8)*8) + -12))")
