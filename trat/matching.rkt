@@ -5,7 +5,8 @@
 (provide (struct-out rule))
 (provide make-rule match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*
-         is-tvar-matching? is-non-tvar-matching?)
+         is-tvar-matching? is-non-tvar-matching?
+         unify)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -47,15 +48,34 @@
 
 ;; solve: (term * term) list * subst -> subst
 ;; elim: vname -> term -> (term * term) list -> subst -> subst
-(define (solve termpairs s)
-  (letrec ([solve (λ (pairs sub1)
-                    (void))]
-           [elim (λ (x) (void))])
-    (solve termpairs s)))
 
 ;; unify: (term * term) -> subst
 (define (unify term1 term2)
-  (solve (list (cons term1 term2)) '()))
+  (let ([sub (make-hash '())])
+  (letrec ([solve (λ (pairs)
+                    (if (empty? pairs)
+                        sub
+                        (let ([t1 (car (car pairs))]
+                              [t2 (cdr (car pairs))]
+                              [ts (cdr pairs)])
+                          (cond [(and (string? t1) (equal? t1 t2)) (solve ts)]
+                                [(string? t1) (elim t1 t2 ts)]
+                                [(string? t2) (elim t2 t1 ts)]
+                                [(and (sigma-term? t1)
+                                      (sigma-term? t2)
+                                      (equal? (sigma-term-symbol t1)
+                                              (sigma-term-symbol t2))) (solve (append (map cons (sigma-term-term-list t1)
+                                                                                           (sigma-term-term-list t2)) ts))]
+                                [else 'fail]))))]
+           [elim (λ (x t pairs)
+                   (if (occurs x t)
+                       'fail
+                       (let ([push-through (curry lift (make-hash (list (cons x t))))])
+                                (begin
+                                  (hash-for-each sub (λ (k v) (push-through v)))
+                                  (hash-set! sub x t)
+                                  (solve (map (λ (p) (cons (push-through (car p)) (push-through (cdr p)))) pairs))))))])
+    (solve (list (cons term1 term2))))))
 
 ;; match: term -> term -> subst
 ;; given a pattern (LHS) and object (input term), find a substitution that will match one to the other
@@ -123,7 +143,7 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; rewrite: (term * term) list -> term -> term
-(define (rewrite-parameterize matcher rules input rule->string)
+(define (rewrite-parameterize matcher rules input [rule->string (λ (r) "")])
   (letrec ([f (λ (ruleset)
                 (if (empty? ruleset) 'fail ;; tried to match input to all rules and failed
                     (let* ([r (car ruleset)]
@@ -138,12 +158,12 @@
     (f rules)))
 
 (define rewrite (curry rewrite-parameterize match))
-(define (varsolver-rewrite tvar rules input rule->string) ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input rule->string))
+(define (varsolver-rewrite tvar rules input [rule->string (λ (r) "")]) ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input rule->string))
 
 ;; norm: (term * term) list -> term -> term
 ;; TRAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
-(define (rewrite*-parameterize rewriter rules input rule->string)
+(define (rewrite*-parameterize rewriter rules input [rule->string (λ (r) "")])
   (letrec ([f (λ (expr)
                 (if (or (term-variable? expr) (term-constant? expr)) expr ;; when we hit a variable or constant, do nothing & go up the stack
                     ;; fully normalize all the subterms
@@ -156,5 +176,5 @@
     (f input)))
 
 (define rewrite* (curry rewrite*-parameterize rewrite))
-(define (varsolver-rewrite* tvar rules input rule->string)
+(define (varsolver-rewrite* tvar rules input [rule->string (λ (r) "")])
   ((curry rewrite*-parameterize (curry varsolver-rewrite tvar)) rules input rule->string))
