@@ -2,25 +2,12 @@
 
 (require "termIR.rkt")
 
-(provide (struct-out rule))
-(provide make-rule match rewrite rewrite*
+(provide match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*
          is-tvar-matching? is-non-tvar-matching?
          unify lift)
 
-;; terms are vname/variables, integers, or sigma-terms
-;; let's make variables strings for now
 
-;; subst is a hash-table mapping variables to terms
-(struct subst (mapping) #:transparent)
-
-;; a rule has a lefthand side, a righthand side and a name
-(struct rule (lhs rhs name) #:transparent)
-
-(define (make-rule lhs rhs)
-  (rule lhs rhs ""))
-
-(struct trs (ruleset rule->string order-hash))
 
 ;; indom: vname -> subst -> bool, returns true if variable has a mapping in subst
 (define (indom v sub)

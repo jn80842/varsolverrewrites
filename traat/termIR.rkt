@@ -1,10 +1,27 @@
 #lang racket
 
 (provide (struct-out sigma-term))
-(provide term-constant? term-variable? termIR->halide
-         termIR->variables termIR->in-solved-form? termIR->renamevars)
+(provide (struct-out rule))
+(provide (struct-out eq-identity))
+(provide make-rule term-constant? term-variable? termIR->halide
+         termIR->variables termIR->in-solved-form? termIR->renamevars
+         rename-to-fresh-vars term-size)
 
-(struct vname (str int) #:transparent)
+;; terms are vname/variables, integers, or sigma-terms
+;; let's make variables strings for now
+
+;; subst is a hash-table mapping variables to terms
+(struct subst (mapping) #:transparent)
+
+;; a rule has a lefthand side, a righthand side and a name
+(struct rule (lhs rhs name) #:transparent)
+
+(define (make-rule lhs rhs)
+  (rule lhs rhs ""))
+
+(struct trs (ruleset rule->string order-hash))
+
+(struct eq-identity (lhs rhs) #:transparent)
 
 ;; terms can be variables (string representation), integers, booleans (symbols 'true and 'false), or sigma-terms
 
@@ -74,3 +91,21 @@
                       [(term-constant? tprime) tprime]
                       [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
     (f term)))
+
+(define (rename-to-fresh-vars term varmap)
+  (letrec ([f (λ (tprime)
+                (cond [(and (term-variable? tprime) (hash-has-key? varmap tprime)) (hash-ref varmap tprime)]
+                      [(and (term-variable? tprime) (not (hash-has-key? varmap tprime))) (begin
+                                                                                           (hash-set! varmap tprime (format "v~a" (hash-count varmap)))
+                                                                                           (hash-ref varmap tprime))]
+                      [(term-constant? tprime) tprime]
+                      [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
+    (cons varmap (f term))))
+
+(define (term-size input-term)
+  (letrec ([f (λ (t)
+                (if (or (term-variable? t) (term-constant? t))
+                    1
+                    (foldl + 1 (map f (sigma-term-term-list t)))))])
+    (f input-term)))
+                
