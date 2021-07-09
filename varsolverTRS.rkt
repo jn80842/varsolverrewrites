@@ -4,7 +4,7 @@
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 
-(provide originalvarsolverTRS normalize normalize->termIR
+(provide originalvarsolverTRS normalize normalize->termIR varsolver-reduction-order?
          tvar-count-reduction-order? tvar-count-reduction-order-equal?
          move-tvar-left-reduction-order? move-tvar-left-reduction-order-equal?
          move-tvar-up-reduction-order? move-tvar-up-reduction-order-equal? rule->halide-string benchmark-TRS)
