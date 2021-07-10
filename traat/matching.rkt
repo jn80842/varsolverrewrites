@@ -20,7 +20,7 @@
 ;; lift: subst -> term -> term
 (define (lift sub t)
   (letrec ([f (λ (t1)
-                (cond [(string? t1) (if (indom t1 sub) (app sub t1) t1)]
+                (cond [(term-variable? t1) (if (indom t1 sub) (app sub t1) t1)]
                       [(term-constant? t1) t1]
                       [else (sigma-term (sigma-term-symbol t1) (map f (sigma-term-term-list t1)))]))])
     (f t)))
@@ -28,7 +28,7 @@
 ;; occurs: vname -> term -> bool
 (define (occurs var t)
   (letrec ([f (λ (t1)
-                (cond [(string? t1) (equal? var t1)]
+                (cond [(term-variable? t1) (equal? var t1)]
                       [(term-constant? t1) #f]
                       [else (ormap f (sigma-term-term-list t1))]))])
     (f t)))
@@ -45,9 +45,9 @@
                         (let ([t1 (car (car pairs))]
                               [t2 (cdr (car pairs))]
                               [ts (cdr pairs)])
-                          (cond [(and (string? t1) (equal? t1 t2)) (solve ts)]
-                                [(string? t1) (elim t1 t2 ts)]
-                                [(string? t2) (elim t2 t1 ts)]
+                          (cond [(and (term-variable? t1) (equal? t1 t2)) (solve ts)]
+                                [(term-variable? t1) (elim t1 t2 ts)]
+                                [(term-variable? t2) (elim t2 t1 ts)]
                                 [(and (sigma-term? t1)
                                       (sigma-term? t2)
                                       (equal? (sigma-term-symbol t1)
@@ -75,10 +75,10 @@
                       (cond [(and (term-constant? (car curr-eq))
                                   (term-constant? (cdr curr-eq))
                                   (equal? (car curr-eq) (cdr curr-eq))) (matches ret-eq-set sub)]
-                            [(and (string? (car curr-eq))
+                            [(and (term-variable? (car curr-eq))
                                   (indom (car curr-eq) sub)
                                   (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
-                            [(and (string? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set
+                            [(and (term-variable? (car curr-eq)) (not (indom (car curr-eq) sub))) (matches ret-eq-set
                                                                                                     (hash-set sub (car curr-eq)
                                                                                                               (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
@@ -107,18 +107,18 @@
                       (cond [(and (term-constant? (car curr-eq))
                                   (term-constant? (cdr curr-eq))
                                   (equal? (car curr-eq) (cdr curr-eq))) (matches ret-eq-set sub)]
-                            [(and (string? (car curr-eq))
+                            [(and (term-variable? (car curr-eq))
                                   (indom (car curr-eq) sub)
                                   (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
-                            [(and (string? (car curr-eq))
+                            [(and (term-variable? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-tvar-matching? (car curr-eq))
                                   (occurs tvar (cdr curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
-                            [(and (string? (car curr-eq))
+                            [(and (term-variable? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-non-tvar-matching? (car curr-eq))
                                   (not (occurs tvar (cdr curr-eq)))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
-                            [(and (string? (car curr-eq))
+                            [(and (term-variable? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
                                   (is-general-matching? (car curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))

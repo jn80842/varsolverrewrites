@@ -5,7 +5,7 @@
 (provide (struct-out eq-identity))
 (provide make-rule term-constant? term-variable? termIR->halide
          termIR->variables termIR->in-solved-form? termIR->renamevars
-         rename-to-fresh-vars term-size)
+         rename-to-fresh-vars term-size contains-target-variable?)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -108,4 +108,10 @@
                     1
                     (foldl + 1 (map f (sigma-term-term-list t)))))])
     (f input-term)))
-                
+
+(define (contains-target-variable? term var)
+  (letrec ([f (λ (t)
+                (cond [(term-variable? t) (equal? t var)]
+                      [(term-constant? t) #f]
+                      [else (ormap f (sigma-term-term-list t))]))])
+    (f term)))
