@@ -79,4 +79,4 @@
 (define obj7 (sigma-term '+ (list (sigma-term '* (list "a" "b")) (sigma-term '* (list "a" "c")))))
 (check-equal? (varsolver-rewrite* "a" vsruleset2 obj7) (sigma-term '* (list "a" (sigma-term '+ (list "b" "c")))))
 
-(check-equal? (unify "x" (sigma-term '+ (list "a" "b"))) (make-hash (list (cons "x" (sigma-term '+ (list "a" "b"))))))
+(check-equal? (unify "x" (sigma-term '+ (list "a" "b"))) (list (cons "x" (sigma-term '+ (list "a" "b")))))

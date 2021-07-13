@@ -3,6 +3,7 @@
 (require "halide-parser.rkt")
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
+(require "traat/criticalpairs.rkt")
 
 (provide originalvarsolverTRS normalize normalize->termIR varsolver-reduction-order?
          tvar-count-reduction-order? tvar-count-reduction-order-equal?
