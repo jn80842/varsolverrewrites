@@ -5,11 +5,13 @@
 (provide (struct-out eq-identity))
 (provide make-rule term-constant? term-variable? termIR->halide
          termIR->variables termIR->in-solved-form? termIR->renamevars
-         rename-to-fresh-vars term-size contains-target-variable?
-         is-tvar-matching? is-non-tvar-matching? is-general-matching?
+         rename-to-fresh-vars term-size cap-and-sort-terms-by-size
+         contains-target-variable? is-tvar-matching?
+         is-non-tvar-matching? is-general-matching?
          rename-to-tarvar-aware-vars same-matching-type?
          can-match-tvar? can-match-non-tvar? can-match-var-to-term?
-         termIR->rule-in-solved-form?)
+         termIR->rule-in-solved-form? termIR->replace-constant-variables
+         equal-mod-alpha-renaming? member-mod-alpha-renaming?)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -114,6 +116,29 @@
                       [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
     (cons varmap (f term))))
 
+(define (termIR->replace-constant-variables term)
+  (let ([varmap (make-hash '())])
+    (letrec ([f (λ (tprime)
+                  (cond [(term-variable? tprime) tprime]
+                        [(term-constant? tprime) (begin
+                                                   (unless (hash-has-key? varmap tprime)
+                                                     (hash-set! varmap tprime (format "c~a" (hash-count varmap))))
+                                                   (hash-ref varmap tprime))]
+                      [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
+      (f term))))
+
+(define (alpha-rename-vars t)
+  (rename-to-tarvar-aware-vars t (make-hash '()) (list "talpha" "nalpha" "valpha")))
+
+(define (equal-mod-alpha-renaming? t1 t2)
+  (equal? (alpha-rename-vars t1) (alpha-rename-vars t2)))
+
+(define (member-mod-alpha-renaming? t tlist)
+  (let ([renamed-t (alpha-rename-vars t)])
+    (findf (λ (tprime)
+             (let ([renamed-t2 (alpha-rename-vars tprime)])
+               (equal? renamed-t renamed-t2))) tlist)))
+
 (define (is-tvar-matching? v)
   (string-prefix? v "t"))
 (define (is-non-tvar-matching? v)
@@ -168,6 +193,10 @@
                     1
                     (foldl + 1 (map f (sigma-term-term-list t)))))])
     (f input-term)))
+
+(define (cap-and-sort-terms-by-size n terms)
+  (let ([term-size-pairs (filter (λ (p) (< (car p) n)) (map (λ (t) (cons (term-size t) t)) terms))])
+    (map cdr (sort term-size-pairs (λ (p1 p2) (< (car p1) (car p2)))))))
 
 (define (contains-target-variable? term var)
   (letrec ([f (λ (t)

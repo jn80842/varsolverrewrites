@@ -190,8 +190,8 @@
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
-                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
-                                               (rule->string r)))
+                           ; (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                           ;                    (rule->string r)))
                             rewritten-input)
                           ))))])
     (f rules)))
@@ -202,7 +202,7 @@
 (define (varsolver-rules-rewrite rules input [rule->string (λ (r) "")])
   ((curry rewrite-parameterize varsolver-rules-match) rules input))
 ;; norm: (term * term) list -> term -> term
-;; TRAT calls this norm but it's a kleine closure on -->_R
+;; TRaAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
 (define (rewrite*-parameterize rewriter rules input [rule->string (λ (r) "")])
   (letrec ([f (λ (expr)
