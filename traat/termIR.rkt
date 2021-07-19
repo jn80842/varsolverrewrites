@@ -74,12 +74,19 @@
                                    (f (list-ref (sigma-term-term-list tprime) 1)))]))])
     (f t)))
 
+(define (uniq l)
+  (letrec ([f (λ (uniq-lst lst)
+                (cond [(empty? lst) uniq-lst]
+                      [(member (car lst) uniq-lst) (f uniq-lst (cdr lst))]
+                      [else (f (append uniq-lst (list (car lst))) (cdr lst))]))])
+    (f '() l)))
+
 (define (termIR->variables t)
   (letrec ([f (λ (tprime)
                 (cond [(string? tprime) (list tprime)]
-                      [(sigma-term? tprime) (flatten (map f (sigma-term-term-list tprime)))]
+                      [(sigma-term? tprime) (map f (sigma-term-term-list tprime))]
                       [else '()]))])
-    (set->list (list->set (f t)))))
+    (uniq (flatten (f t)))))
 
 (define (is-target-variable? v)
   (string-prefix? v "t"))

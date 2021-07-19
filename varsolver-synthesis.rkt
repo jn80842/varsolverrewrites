@@ -8,6 +8,12 @@
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 
+(provide verify-RHS-is-target-variable?
+         synthesize-nonly-rewrite
+         synth-nonly-over-insn-count-range
+         synthesize-topn-rewrite
+         synth-topn-over-insn-count-range)
+
 ;; assume LHS is a function that takes the same inputs as the RHS sketch
 (define (synthesize-rewrite LHS sk inputs)
   (let* ([evaled-sketch (apply (get-sketch-function sk) inputs)]
@@ -52,74 +58,88 @@
 
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
-(define (synthesize-topn-rewrite renamed-LHS LHS-inputs sk tar-idx)
-  (begin
-    (clear-asserts!)
-    (define-symbolic* tarvar integer?)
-    (define-symbolic* root-op integer?)
-    (let* ([non-tarvars (for/list ([i (range (sketch-input-count sk))]) (get-sym-int))]
-           [evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar non-tarvars)]
-           [evaled-LHS (apply (termIR->function (halide->termIR renamed-LHS) LHS-inputs) tarvar non-tarvars)]
-           [model (time (with-handlers ([(λ (e) #t)
-                                         (λ (e) (displayln (format "Timeout searching for RHS for ~a with insn count ~a"
-                                                                   renamed-LHS (length (sketch-insn-list sk)))))])
-                          (synthesize #:forall (cons tarvar non-tarvars)
-                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)
-                                                                       ))))])
-      (unless (void? model)
-        (if (unsat? model)
-            (displayln (format "Could not find topn RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
-            (begin
-           ;   (displayln (format "Found rule ~a -> ~a" renamed-LHS (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))
-              (make-rule (halide->termIR renamed-LHS) (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model))))))))))
+(define (synthesize-topn-rewrite LHS insn-count)
+  (let* ([LHS-variables (termIR->variables LHS)]
+         [target-variables (filter is-tvar-matching? LHS-variables)]
+         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
+         [sk (get-symbolic-sketch operator-list (length non-tvar-variables) insn-count)])
+    (if (not (equal? (length target-variables) 1))
+        (void)
+        (begin
+          (clear-asserts!)
+          (define-symbolic* tarvar integer?)
+          (define-symbolic* root-op integer?)
+          (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
+                 [evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar non-tarvars)]
+                 [evaled-LHS (apply (termIR->function LHS LHS-variables)
+                                    (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
+                 [model (time (with-handlers ([(λ (e) #t)
+                                               (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
+                                                                   (termIR->halide LHS) insn-count)))])
+                                (synthesize #:forall (cons tarvar non-tarvars)
+                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+            (unless (void? model)
+              (if (unsat? model)
+                  (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
+                  (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model)))))))))))
 
-(define (synth-topn-over-insn-count-range LHS inputs insn-count tar-idx)
+(define (synth-topn-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
                 (if (> i insn-count)
                     'fail
-                    (let* ([sk (get-symbolic-sketch operator-list (sub1 (length inputs)) i)]
-                           [rule (synthesize-topn-rewrite LHS inputs sk tar-idx)])
-                      (if (void? rule)
+                    (let* ([synthed-rule (synthesize-topn-rewrite LHS i)])
+                      (if (void? synthed-rule)
                           (f (add1 i))
-                          rule))))])
+                          synthed-rule))))])
     (f 0)))
 
-;; assume that target variable is first in LHS-inputs
-(define (synthesize-nonly-rewrite renamed-LHS LHS-inputs sk)
-  (begin
-    (clear-asserts!)
-    (define-symbolic* tarvar integer?)
-    (let* ([non-tarvars (for/list ([i (range (sketch-input-count sk))]) (get-sym-int))]
-           [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
-           [evaled-LHS (apply (termIR->function (halide->termIR renamed-LHS) LHS-inputs) tarvar non-tarvars)]
-           [model (time (with-handlers ([(λ (e) #t)
-                                         (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
-                                                                   renamed-LHS (length (sketch-insn-list sk)))))])
-                          (synthesize #:forall (cons tarvar non-tarvars)
-                                      #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
-      (unless (void? model)
-        (if (unsat? model)
-            (displayln (format "Could not find n-only RHS for ~a with insn count ~a" renamed-LHS (length (sketch-insn-list sk))))
-            (make-rule (halide->termIR renamed-LHS) (halide->termIR (sketch->halide-expr (evaluate sk model) (cdr LHS-inputs)))))))))
+(define (synthesize-nonly-rewrite LHS insn-count)
+  (let* ([LHS-variables (termIR->variables LHS)]
+         [target-variables (filter is-tvar-matching? LHS-variables)]
+         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
+         [sk (get-symbolic-sketch operator-list (length non-tvar-variables) insn-count)])
+    (if (not (equal? (length target-variables) 1))
+        (void)
+        (begin
+          (clear-asserts!)
+          (define-symbolic* tarvar integer?)
+          (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
+                 [evaled-LHS (apply (termIR->function LHS LHS-variables)
+                                    (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
+                 [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
+                 [model (time (with-handlers ([(λ (e) #t)
+                                               (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
+                                                                   (termIR->halide LHS) insn-count)))])
+                                (synthesize #:forall (cons tarvar non-tarvars)
+                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+            (unless (void? model)
+              (if (unsat? model)
+                  (displayln (format "Could not find n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
+                  (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-variables))))))))))
 
-(define (synth-nonly-over-insn-count-range LHS inputs insn-count)
+(define (synth-nonly-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
                 (if (> i insn-count)
                     'fail
-                    (let ([rule (synthesize-nonly-rewrite LHS inputs
-                                                          (get-symbolic-sketch operator-list (sub1 (length inputs)) i))])
-                      (if (void? rule)
+                    (let ([synthed-rule (synthesize-nonly-rewrite LHS i)])
+                      (if (void? synthed-rule)
                           (f (add1 i))
-                          rule))))])
+                          synthed-rule))))])
     (f 0)))
 
-(define (verify-RHS-is-target-variable? renamed-LHS LHS-inputs)
-  (clear-asserts!)
-  (define-symbolic* tarvar integer?)
-  (let* ([non-tarvars (for/list ([i (range (sub1 (length LHS-inputs)))]) (get-sym-int))]
-         [evaled-LHS (apply (termIR->function renamed-LHS LHS-inputs) tarvar non-tarvars)]
-         [cex (verify (assert (equal? evaled-LHS tarvar)))])
-    (unsat? cex)))
+(define (verify-RHS-is-target-variable? LHS)
+  (let* ([LHS-variables (termIR->variables LHS)]
+         [target-variables (filter is-tvar-matching? LHS-variables)]
+         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)])
+    (if (not (equal? (length target-variables) 1))
+        #f
+        (begin (clear-asserts!)
+               (define-symbolic* tarvar integer?)
+               (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
+                      [evaled-LHS (apply (termIR->function LHS LHS-variables)
+                                         (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
+                      [cex (verify (assert (equal? evaled-LHS tarvar)))])
+                 (unsat? cex))))))
 
 ;; assume input pattern is normalized and not in solved form
 (define (find-rule patt tvar)
@@ -227,4 +247,4 @@
 (make-rule (halide->termIR "((t0 || n0) || n1)") (halide->termIR "(t0 || (n1 || n0))"))
 ))
 
-(benchmark-TRS (append batch1-rules originalvarsolverTRS ))
+;;(benchmark-TRS (append batch1-rules originalvarsolverTRS ))

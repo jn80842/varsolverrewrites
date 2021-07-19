@@ -8,6 +8,7 @@
 (define term2 (sigma-term '* (list "a" (sigma-term '+ (list "c" "d")))))
 
 (check-equal? (length (termIR->variables term1)) 2)
+(check-equal? (termIR->variables term1) (list "a" "b"))
 
 (check-true (termIR->in-solved-form? term2 "a"))
 (check-false (termIR->in-solved-form? term1 "a"))

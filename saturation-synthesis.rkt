@@ -4,6 +4,7 @@
 (require "traat/matching.rkt")
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
+(require "varsolver-synthesis.rkt")
 
 (provide find-all-patterns)
 
@@ -41,8 +42,40 @@
                     (cons tprime (flatten (map f (sigma-term-term-list tprime))))))])
     (f term)))
 
+(define (find-all-subterms-for-synthesis term tvar max-size)
+  (filter (λ (t) (not (termIR->in-solved-form? t tvar)))
+          (cap-and-sort-terms-by-size max-size
+                                      (find-all-subterms (termIR->replace-constant-variables term)))))
+
+(define (synthesize-rule LHS)
+  (let* ([LHS-variables (termIR->variables LHS)]
+         [nonly-output (synth-nonly-over-insn-count-range LHS 5)])
+    (if (equal? 'fail nonly-output)
+        (synth-topn-over-insn-count-range LHS 4)
+        nonly-output)))
+
+;; pattern should use rule var naming conventions distinct from t0/n0/x scheme
+(define (synth-rule-from-LHS-pattern pattern TRS blacklist)
+  (let* ([normalized-patt (varsolver-rules-rewrite* TRS pattern)]
+         [LHS (cdr (rename-to-tarvar-aware-vars normalized-patt (make-hash '()) (list "t" "n" "v")))]
+         [LHS-variables (termIR->variables LHS)])
+    (let-values ([(target-variables ntvar-variables) (partition is-tvar-matching? LHS-variables)])
+      (cond [(termIR->rule-in-solved-form? LHS) (displayln (format "~a candidate LHS already in solved form"
+                                                                   (termIR->halide LHS)))
+                                                'pass]
+            [(member-mod-alpha-renaming? LHS blacklist) 'pass]
+            [(and (equal? (length target-variables) 1)
+                  (verify-RHS-is-target-variable? LHS)) (make-rule LHS (list-ref target-variables 0))]
+            [else (let ([output (synthesize-rule LHS)])
+                    (if (equal? 'fail output)
+                        LHS
+                        output))]))))
+
 ;; saturating synthesis algo
-(define (saturating-synthesis input tvar TRS blacklist)
+;; parameters:
+;; top size of LHS term (15)
+;; max insn count for n-only and t-op-n sketches (5, 5)
+#;(define (saturating-synthesis input tvar TRS blacklist)
   (let ([normalized-input (varsolver-rewrite* tvar TRS input)])
     (if (termIR->in-solved-form? normalized-input tvar)
         (displayln (format "~a input rewrites to solved form ~a" (termIR->halide input) (termIR->halide normalized-input)))
@@ -57,6 +90,39 @@
                     (if (member-mod-alpha-renaming? normalized-LHS blacklist)
                         (displayln (format "~a is on the blacklist" (termIR->halide normalized-LHS)))
                         (displayln (format "~a is a valid LHS candidate" (termIR->halide normalized-LHS))))))))))))
+
+(define (saturating-synthesis input tvar TRS blacklist)
+  (letrec ([f (λ (input subtrees patterns TRS blacklist)
+                                 (cond [(empty? subtrees) (begin
+                                                            (displayln "CHECKED ALL SUBTREES/PATTERNS")
+                                                            (cons TRS blacklist))]
+                                       [(empty? patterns) (begin
+                                                            (displayln (format "SUBTERM ~a:" (termIR->halide (car subtrees))))
+                                                            (f input (cdr subtrees) (find-all-patterns (car subtrees) tvar) TRS blacklist))]
+                                       [else (let ([result (synth-rule-from-LHS-pattern (car patterns) TRS blacklist)])
+                                               (if (equal? 'pass result)
+                                                   (f input subtrees (cdr patterns) TRS blacklist)
+                                                   (if (sigma-term? result)
+                                                       (begin
+                                                         (displayln (format "ADDING ~a TO BLACKLIST" (termIR->halide result)))
+                                                         (f input subtrees (cdr patterns) TRS (cons result blacklist)))
+                                                       (let* ([updated-TRS (append TRS (list result))]
+                                                              [normed-input (varsolver-rewrite* tvar updated-TRS input)])
+                                                         (begin
+                                                           (displayln (format "LEARNED NEW RULE ~a --> ~a" (termIR->halide (rule-lhs result))
+                                                                              (termIR->halide (rule-rhs result))))
+                                                           (if (termIR->in-solved-form? normed-input tvar)
+                                                               (begin
+                                                                 (displayln (format "INPUT ~a NOW SOLVED TO ~a" input normed-input))
+                                                                 (cons updated-TRS blacklist))
+                                                               (begin
+                                                                 (displayln (format "NOW SOLVING FOR ~a" normed-input))
+                                                                 (f normed-input (find-all-subterms-for-synthesis normed-input tvar 15)
+                                                                    '() updated-TRS blacklist))))))))]))])
+    (let ([normed-init-input (varsolver-rewrite* tvar TRS input)])
+      (if (termIR->in-solved-form? normed-init-input tvar)
+          (displayln "Initial input is solved by existing TRS")
+          (f normed-init-input (find-all-subterms-for-synthesis normed-init-input tvar 15) '() TRS blacklist)))))
 
 (define input1 (sigma-term '+ (list (sigma-term '- (list "w" "y")) "x")))
 (define input2-halide "(((((-272 - ((min(y*256, z + -256) + w) % 8))/8) + (u*16)) + x) <= 2)")
