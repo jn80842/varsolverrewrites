@@ -11,7 +11,7 @@
 ;; find all patterns that can match the full input term
 ;; NB: we always replace the same expr with the same variable
 ;; so "((x*y) + (x*y))" will not produce the pattern "v0 + v1" even though it could match it
-(define (find-all-patterns term tvar)
+(define (find-all-patterns term tvar max-size)
   (define counter 0)
   (define expr-to-var (make-hash '()))
   (letrec ([get-fresh-var (λ (e v)
@@ -33,7 +33,7 @@
                         (sigma-term sym args1)
                         (let ([arg-versions (outer (car args2))])
                           (map (λ (a) (inner sym (append args1 (list a)) (cdr args2))) arg-versions))))])
-    (outer term)))
+    (cap-and-sort-terms-by-size max-size (outer term))))
 
 (define (find-all-subterms term)
   (letrec ([f (λ (tprime)
@@ -44,8 +44,9 @@
 
 (define (find-all-subterms-for-synthesis term tvar max-size)
   (filter (λ (t) (not (termIR->in-solved-form? t tvar)))
-          (cap-and-sort-terms-by-size max-size
-                                      (find-all-subterms (termIR->replace-constant-variables term)))))
+       ;   (cap-and-sort-terms-by-size max-size
+                                      (find-all-subterms (termIR->replace-constant-variables term))))
+  ;)
 
 (define (synthesize-rule LHS)
   (let* ([LHS-variables (termIR->variables LHS)]
@@ -98,7 +99,7 @@
                                                             (cons TRS blacklist))]
                                        [(empty? patterns) (begin
                                                             (displayln (format "SUBTERM ~a:" (termIR->halide (car subtrees))))
-                                                            (f input (cdr subtrees) (find-all-patterns (car subtrees) tvar) TRS blacklist))]
+                                                            (f input (cdr subtrees) (find-all-patterns (car subtrees) tvar 15) TRS blacklist))]
                                        [else (let ([result (synth-rule-from-LHS-pattern (car patterns) TRS blacklist)])
                                                (if (equal? 'pass result)
                                                    (f input subtrees (cdr patterns) TRS blacklist)
@@ -132,4 +133,4 @@
                                                 (cap-and-sort-terms-by-size 15 (find-all-subterms (termIR->replace-constant-variables normalized-input3))))))
 
 (define input4-halide "(((((((((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25) + (((((((z + min(x*160, w + -160)) + min(max(0 - min(y, 0), y), 0 - max(y, 0))) + -6)/4)*-4) + max(max(0 - min(y, 0), y), 0 - max(y, 0))) + (z + min(x*160, w + -160)))) + 30)/20)*5) + (((max(((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25, (((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25) + 15) + u) + -6)/4)) <= ((v/4) - 1))")
-(saturating-synthesis (halide->termIR input4-halide) "x" originalvarsolverTRS '())
+;;(saturating-synthesis (halide->termIR input4-halide) "x" originalvarsolverTRS '())
