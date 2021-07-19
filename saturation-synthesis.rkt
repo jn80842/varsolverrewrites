@@ -130,3 +130,6 @@
 (define normalized-input3 (varsolver-rewrite* "x" originalvarsolverTRS (halide->termIR input3-halide)))
 (define input3-synth-candidate-subtrees (map termIR->halide (filter (λ (t) (not (termIR->in-solved-form? t "x")))
                                                 (cap-and-sort-terms-by-size 15 (find-all-subterms (termIR->replace-constant-variables normalized-input3))))))
+
+(define input4-halide "(((((((((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25) + (((((((z + min(x*160, w + -160)) + min(max(0 - min(y, 0), y), 0 - max(y, 0))) + -6)/4)*-4) + max(max(0 - min(y, 0), y), 0 - max(y, 0))) + (z + min(x*160, w + -160)))) + 30)/20)*5) + (((max(((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25, (((max(max(max(y, max(0 - y, y)), 0) + max(y, 0), 0) + 31)/25)*25) + 15) + u) + -6)/4)) <= ((v/4) - 1))")
+(saturating-synthesis (halide->termIR input4-halide) "x" originalvarsolverTRS '())
