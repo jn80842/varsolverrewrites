@@ -18,3 +18,10 @@
                                    (sigma-term '+ (list "b" "a")))) "d")))
 
 (check-equal? (term-size term3) 9)
+
+(check-true (termIR->typechecks? (sigma-term '+ (list "x" "y"))))
+(check-false (termIR->typechecks? (sigma-term 'or (list (sigma-term '< (list "x" "y")) "z"))))
+;; note this halide expr would *not* typecheck
+(check-true (termIR->typechecks? (sigma-term 'or (list (sigma-term '< (list "x" "y")) (sigma-term '+ (list "z" "w"))))))
+(check-true (termIR->typechecks? (sigma-term 'select (list (sigma-term '< (list "x" "y")) "z" "w"))))
+(check-false (termIR->typechecks? (sigma-term 'select (list "x" "z" "w"))))

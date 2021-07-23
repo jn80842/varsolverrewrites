@@ -5,13 +5,14 @@
 (provide (struct-out eq-identity))
 (provide make-rule term-constant? term-variable? termIR->halide
          termIR->variables termIR->in-solved-form? termIR->renamevars
-         rename-to-fresh-vars term-size cap-and-sort-terms-by-size
+         rename-to-fresh-vars term-size term-op-count cap-and-sort-terms-by-size
          contains-target-variable? is-tvar-matching?
          is-non-tvar-matching? is-general-matching?
          rename-to-tarvar-aware-vars same-matching-type?
          can-match-tvar? can-match-non-tvar? can-match-var-to-term?
          termIR->rule-in-solved-form? termIR->replace-constant-variables
-         equal-mod-alpha-renaming? member-mod-alpha-renaming?)
+         equal-mod-alpha-renaming? member-mod-alpha-renaming? contains-operator?
+         termIR->typechecks?)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -135,7 +136,7 @@
       (f term))))
 
 (define (alpha-rename-vars t)
-  (rename-to-tarvar-aware-vars t (make-hash '()) (list "talpha" "nalpha" "valpha")))
+  (cdr (rename-to-tarvar-aware-vars t (make-hash '()) (list "talpha" "nalpha" "valpha"))))
 
 (define (equal-mod-alpha-renaming? t1 t2)
   (equal? (alpha-rename-vars t1) (alpha-rename-vars t2)))
@@ -201,6 +202,13 @@
                     (foldl + 1 (map f (sigma-term-term-list t)))))])
     (f input-term)))
 
+(define (term-op-count input-term)
+  (letrec ([f (λ (t)
+                (if (or (term-variable? t) (term-constant? t))
+                    0
+                    (foldl + 1 (map f (sigma-term-term-list t)))))])
+    (f input-term)))
+
 (define (cap-and-sort-terms-by-size n terms)
   (let ([term-size-pairs (filter (λ (p) (< (car p) n)) (map (λ (t) (cons (term-size t) t)) terms))])
     (map cdr (sort term-size-pairs (λ (p1 p2) (< (car p1) (car p2)))))))
@@ -210,4 +218,30 @@
                 (cond [(term-variable? t) (equal? t var)]
                       [(term-constant? t) #f]
                       [else (ormap f (sigma-term-term-list t))]))])
+    (f term)))
+
+(define (contains-operator? term op)
+  (letrec ([f (λ (t)
+                (cond [(or (term-variable? t) (term-constant? t)) #f]
+                      [(equal? (sigma-term-symbol t) op) #t]
+                      [else (ormap f (sigma-term-term-list t))]))])
+    (f term)))
+
+;; true if expr typechecks when all vars are integer types, false otherwise
+;; checks that no variables should be boolean type
+;; assumes that halide expression would typecheck
+(define (termIR->typechecks? term)
+  (letrec ([f (λ (t)
+                (cond [(or (term-variable? t) (term-constant? t)) #t]
+                      [(and (equal? (sigma-term-symbol t) 'not)
+                            (term-variable? (first (sigma-term-term-list t)))) #f]
+                      [(and (equal? (sigma-term-symbol t) 'and)
+                            (or (term-variable? (first (sigma-term-term-list t)))
+                                (term-variable? (second (sigma-term-term-list t))))) #f]
+                      [(and (equal? (sigma-term-symbol t) 'or)
+                            (or (term-variable? (first (sigma-term-term-list t)))
+                                (term-variable? (second (sigma-term-term-list t))))) #f]
+                      [(and (equal? (sigma-term-symbol t) 'select)
+                            (term-variable? (first (sigma-term-term-list t)))) #f]
+                      [else (andmap f (sigma-term-term-list t))]))])
     (f term)))

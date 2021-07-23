@@ -36,7 +36,8 @@
            [(error start) $2]
            [(exp) $1])
     (boolvar [(UINT VAR) $2]
-             [(UINT VAR) $2])
+             [(UINT TVAR) $2]
+             [(UINT NTVAR) $2])
 
     (exp [(NUM) $1]
          [(VAR) (symbol->string $1)]
