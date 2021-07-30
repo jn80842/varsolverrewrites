@@ -4,6 +4,7 @@
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 (require "traat/criticalpairs.rkt")
+(require "coqaxiomTRS.rkt")
 
 (provide originalvarsolverTRS normalize normalize->termIR varsolver-reduction-order?
          tvar-count-reduction-order? tvar-count-reduction-order-equal?
@@ -356,6 +357,56 @@
                             (displayln (format "NOT SOLVED: ~a to ~a" e (termIR->halide normalizedIR))))))
                     (displayln (format "benchmarks solved: ~a" solved-count))))))
 
+(define (benchmark-and-save-to-files TRS solved-out-file not-solved-out-file)
+  (define solved-out (open-output-file solved-out-file))
+  (define not-solved-out (open-output-file not-solved-out-file))
+  (with-input-from-file "benchmarks.txt"
+    (thunk
+     (for ([e (in-lines)])
+       (let ([normalized-term (varsolver-rewrite* "x" TRS (halide->termIR e) rule->halide-string)])
+         (if (termIR->in-solved-form? normalized-term "x")
+             (displayln e solved-out)
+             (displayln e not-solved-out))))))
+  (close-output-port solved-out)
+  (close-output-port not-solved-out))
+
+(define (benchmark-set-difference TRS1 TRS2 solved1-file solved2-file)
+  (define solved1-out (open-output-file solved1-file))
+  (define solved2-out (open-output-file solved2-file))
+  (with-input-from-file "benchmarks.txt"
+    (thunk
+     (for ([e (in-lines)])
+       (let ([normalized-term1 (varsolver-rewrite* "x" TRS1 (halide->termIR e) rule->halide-string)]
+             [normalized-term2 (varsolver-rewrite* "x" TRS2 (halide->termIR e) rule->halide-string)])
+         (if (and (termIR->in-solved-form? normalized-term1 "x")
+                  (not (termIR->in-solved-form? normalized-term2 "x")))
+             (displayln e solved1-out)
+             (if (and (not (termIR->in-solved-form? normalized-term1 "x"))
+                      (termIR->in-solved-form? normalized-term2 "x"))
+                 (displayln e solved2-out)
+                 (void)))))))
+  (close-output-port solved1-out)
+  (close-output-port solved2-out))
+
+(define (normalize-coq halide-term)
+  (termIR->halide (varsolver-rewrite* "x" coqaxiomTRS (halide->termIR halide-term) rule->halide-string)))
+
+(define (normalize-coqvs halide-term)
+  (termIR->halide (varsolver-rewrite* "x" (append coqaxiomTRS originalvarsolverTRS) (halide->termIR halide-term) rule->halide-string)))
+
+(define (normalize-vscoq halide-term)
+  (termIR->halide (varsolver-rewrite* "x" (append originalvarsolverTRS coqaxiomTRS) (halide->termIR halide-term) rule->halide-string)))
 ;;(benchmark-TRS (list (make-rule (halide->termIR "(t0 - t0)") 0) (make-rule (halide->termIR "(t0 >= t0)") 'true)))
 
 (define expr1 "((((x*16) + ((y/8)*8)) + -20) <= ((((y + 103)/8)*8) + -12))")
+
+(define completion-rules
+  (list (rule (halide->termIR "(t0 - (t1 - n0)) - t2")
+              (halide->termIR "((t0 - t1) - t2) + n0")
+              "completionrule1")))
+
+;; candidates for synthesizing missing rule
+;;  (max(min(likely(x), 13), 0) - max(min(x, 13), 0))
+;;  !(x < (max(y, 1)/96))
+;; (((((y*16) + ((z*16) + (x*32))) + w) + -15) <= ((x*32) + (z*16)))
+;;(((x * 32) + ((((z * 16) + (y * 16)) + w) + -15)) <= ((x * 32) + (z * 16)))

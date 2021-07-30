@@ -2,10 +2,12 @@
 
 (require "termIR.rkt")
 (require "matching.rkt")
+(require "../halide-parser.rkt")
 
 (provide (struct-out critical-pair))
 (provide CP CPs critical-pairs2 critical-pairs
-         top-level-critical-pairs joinable? get-cp-divergent-terms)
+         top-level-critical-pairs joinable? solved-joinable?
+         get-cp-divergent-terms get-cp-equality)
 
 (struct critical-pair (rule1 rule2 subst) #:transparent)
 
@@ -39,8 +41,10 @@
   (flatten (map (λ (r) (CPs R1 r)) R2)))
 
 (define (critical-pairs ruleset)
-  (filter (λ (c) (not (trivial-critical-pair? c))) (critical-pairs2 ruleset ruleset)))
+ ; (filter (λ (c) (not (trivial-critical-pair? c))) (critical-pairs2 ruleset ruleset)))
+  (critical-pairs2 ruleset ruleset))
 
+;; this holds for mappings where one key is mapped to mutiple unique terms, which are not trivial
 (define (trivial-critical-pair? cp)
   (andmap (λ (p) (and (term-variable? (car p)) (term-variable? (cdr p)))) (critical-pair-subst cp)))
 
@@ -66,8 +70,44 @@
     (cons (varsolver-rules-rewrite* (list (critical-pair-rule1 cp)) x)
           (varsolver-rules-rewrite* (list (critical-pair-rule2 cp)) x))))
 
+(define (get-cp-equality cp name)
+  (let* ([terms (get-cp-divergent-terms cp '())]
+         [renamed-terms (rename-to-tarvar-aware-term-pairs terms (make-hash '()) (list "t" "n" "v"))])
+    (eq-identity (car renamed-terms) (cdr renamed-terms) name)))
+
 (define (joinable? cp TRS)
   (let* ([p (get-cp-divergent-terms cp TRS)]
          [y1 (car p)]
          [y2 (cdr p)])
     (equal? (varsolver-rules-rewrite* TRS y1) (varsolver-rules-rewrite* TRS y2))))
+
+(define (solved-joinable? cp TRS)
+    (let* ([p (get-cp-divergent-terms cp TRS)]
+         [y1 (varsolver-rules-rewrite* TRS (car p))]
+         [y2 (varsolver-rules-rewrite* TRS (cdr p))])
+    (or (and (termIR->rule-in-solved-form? y1) (termIR->rule-in-solved-form? y2))
+     (equal? y1 y2))))
+
+
+(define exampleTRS-halide (list
+                    (list "(n0 + t0)" "(t0 + n0)" "coqAdd1")
+                    (list "((t0 + n0) + n1)" "(t0 + (n0 + n1))" "coqAdd6")
+                    (list "(n0 + (t0 + n1))" "(t0 + (n0 + n1))" "coqAdd36")
+                    (list "((n0 + n1) + (t0 + n2))" "((n0 + t0) + (n1 + n2))" "coqAdd15")
+                    (list "((t0 - t1) + n0)" "(t0 - (t1 - n0))" "coqAdd68")
+                    (list "((t0 + n0) - t1)" "((t0 - t1) + n0)" "coqSub155")
+                    (list "(t0 - t0)" "0" "coqSub133")
+                    (list "min(n0, t0)" "min(t0, n0)" "vsmin449")
+                    (list "min(t0, t0)" "t0" "vsmin473")))
+
+(define exampleTRS (map (λ (l) (rule (halide->termIR (first l))
+                                     (halide->termIR (second l))
+                                     (third l))) exampleTRS-halide))
+
+(define completion-rules
+  (list (rule (halide->termIR "(t0 - (t1 - n0)) - t2")
+              (halide->termIR "((t0 - t1) - t2) + n0")
+              "completionrule1")))
+
+
+

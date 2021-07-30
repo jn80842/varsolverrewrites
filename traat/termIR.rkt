@@ -9,6 +9,7 @@
          contains-target-variable? is-tvar-matching?
          is-non-tvar-matching? is-general-matching?
          rename-to-tarvar-aware-vars same-matching-type?
+         rename-to-tarvar-aware-term-pairs
          can-match-tvar? can-match-non-tvar? can-match-var-to-term?
          termIR->rule-in-solved-form? termIR->replace-constant-variables
          equal-mod-alpha-renaming? member-mod-alpha-renaming? contains-operator?
@@ -28,7 +29,7 @@
 
 (struct trs (ruleset rule->string order-hash))
 
-(struct eq-identity (lhs rhs) #:transparent)
+(struct eq-identity (lhs rhs name) #:transparent)
 
 ;; terms can be variables (string representation), integers, booleans (symbols 'true and 'false), or sigma-terms
 
@@ -194,6 +195,11 @@
                       [(term-constant? tprime) tprime]
                       [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
     (cons varmap (f term))))
+
+(define (rename-to-tarvar-aware-term-pairs terms varmap [prefixes (list "tvar" "nvar" "v")])
+  (let* ([map-term-pair-a (rename-to-tarvar-aware-vars (car terms) varmap prefixes)]
+         [map-term-pair-b (rename-to-tarvar-aware-vars (cdr terms) (car map-term-pair-a) prefixes)])
+    (cons (cdr map-term-pair-a) (cdr map-term-pair-b))))
 
 (define (term-size input-term)
   (letrec ([f (λ (t)

@@ -171,6 +171,7 @@
                                         (indom (car curr-eq) sub)
                                         (equal? (app sub (car curr-eq)) (cdr curr-eq))) (matches ret-eq-set sub)]
                                   [(and (term-variable? (car curr-eq))
+                                        (not (indom (car curr-eq) sub))
                                         (can-match-var-to-term? (car curr-eq) (cdr curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq)
                                                                                                                             (cdr curr-eq)))]
                                   [(and (sigma-term? (car curr-eq))
@@ -182,6 +183,7 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; rewrite: (term * term) list -> term -> term
+;; rewrite by matching full term to LHS
 (define (rewrite-parameterize matcher rules input [rule->string (λ (r) "")])
   (letrec ([f (λ (ruleset)
                 (if (empty? ruleset) 'fail ;; tried to match input to all rules and failed
@@ -190,8 +192,8 @@
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
-                           ; (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
-                           ;                    (rule->string r)))
+                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                                               (rule->string r)))
                             rewritten-input)
                           ))))])
     (f rules)))
