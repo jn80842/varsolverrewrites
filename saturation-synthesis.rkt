@@ -6,23 +6,27 @@
 (require "varsolverTRS.rkt")
 (require "varsolver-synthesis.rkt")
 
-(provide find-all-patterns find-all-subterms synthesize-rule
-         synth-rule-from-LHS-pattern saturating-synthesis)
+(provide (all-defined-out))
+
+#;(provide find-all-patterns find-all-subterms synthesize-rule
+         synth-rule-from-LHS-pattern saturating-synthesis termIR->rule-style-varnames)
 
 ;; find all patterns that can match the full input term
 ;; NB: we always replace the same expr with the same variable
 ;; so "((x*y) + (x*y))" will not produce the pattern "v0 + v1" even though it could match it
 (define (find-all-patterns term tvar max-size)
-  (define counter 0)
+  (define t-counter 0)
+  (define n-counter 0)
   (define expr-to-var (make-hash '()))
   (letrec ([get-fresh-var (λ (e v)
                             (if (hash-has-key? expr-to-var e)
                                 (hash-ref expr-to-var e)
                                 (begin
-                                  (set! counter (add1 counter))
                                   (let ([fresh-var (if (contains-target-variable? e v)
-                                                       (format "tvar~a" (sub1 counter))
-                                                       (format "nvar~a" (sub1 counter)))])
+                                                       (begin (set! t-counter (add1 t-counter))
+                                                              (format "t~a" (sub1 t-counter)))
+                                                       (begin (set! n-counter (add1 n-counter))
+                                                              (format "n~a" (sub1 n-counter))))])
                                   (hash-set! expr-to-var e fresh-var)
                                   fresh-var))))]
            [outer (λ (t)
@@ -34,7 +38,7 @@
                         (sigma-term sym args1)
                         (let ([arg-versions (outer (car args2))])
                           (map (λ (a) (inner sym (append args1 (list a)) (cdr args2))) arg-versions))))])
-    (cap-and-sort-terms-by-size max-size (outer term))))
+    (cap-and-sort-terms-by-size max-size (filter (λ (t) (not (term-variable? t))) (flatten (map outer (find-all-subterms term)))))))
 
 (define (find-all-subterms term)
   (letrec ([f (λ (tprime)
@@ -76,8 +80,8 @@
                         LHS
                         output))]))))
 
-(define (termIR->rule-style-varnames term)
-  (cdr (rename-to-tarvar-aware-vars term (make-hash '()) (list "t" "n" "v"))))
+(define (termIR->rule-style-varnames term [var-hash (make-hash '())])
+  (cdr (rename-to-tarvar-aware-vars term var-hash (list "t" "n" "v"))))
 
 ;; saturating synthesis algo
 ;; parameters:
@@ -106,7 +110,7 @@
                                                  (if (equal? 'stop cmd-input)
                                                      (cons TRS (cons (termIR->rule-style-varnames (car patterns)) blacklist))
                                                      (if (not (equal? 'y cmd-input))
-                                                         #;(begin (displayln "Skipping synthesis")
+                                                         (begin (displayln "Skipping synthesis")
                                                                 (f input subtrees (cdr patterns) TRS (cons (termIR->rule-style-varnames (car patterns)) blacklist)))
                                                          (let ([result (synth-rule-from-LHS-pattern (car patterns) TRS blacklist)])
                                                            (if (equal? 'pass result)
@@ -134,3 +138,92 @@
           (displayln "Initial input is solved by existing TRS")
           (f normed-init-input (find-all-subterms-for-synthesis normed-init-input tvar 15) '() TRS blacklist)))))
 
+;;;; helpers
+(define (terms->varsolver-reduction-order? target-variable t1 t2)
+  (let ([renamed-t1 (cdr (rename-to-tarvar-aware-vars t1 (make-hash (list (cons target-variable "tvro")))))]
+        [renamed-t2 (cdr (rename-to-tarvar-aware-vars t2 (make-hash (list (cons target-variable "tvro")))))])
+    (varsolver-reduction-order? (rule renamed-t1 renamed-t2 ""))))
+
+(define (wrong-direction-rewrites TRS1 TRS2 terms)
+  (filter (λ (t) (terms->varsolver-reduction-order? "x"
+                                                         (varsolver-rewrite* "x" TRS2 t)
+                                                         (varsolver-rewrite* "x" TRS1 t))) terms))
+
+(define (add-to-end l e)
+  (append l (list e)))
+
+(define (pattern->in-solved-form? patt)
+  (let ([target-vars (filter is-tvar-matching? (termIR->variables patt))])
+    (and (equal? (length target-vars) 1)
+         (termIR->in-solved-form? patt (car target-vars)))))
+
+(define (synthesis-iteration input current-TRS current-blacklist)
+  (let ([normed-input (varsolver-rewrite* "x" current-TRS input)])
+    (displayln (format "INPUT EXPR: ~a" (termIR->halide input)))
+    (if (termIR->in-solved-form? normed-input "x")
+        (begin
+          (displayln (format "NORMALIZED INPUT ~a IN SOLVED FORM" (termIR->halide normed-input)))
+          (list current-TRS current-blacklist))
+        (let ([patterns (find-all-patterns normed-input "x" 15)])
+          (displayln (format "Found ~a candidate LHS patterns" (length patterns)))
+          (letrec ([f (λ (patts TRS blacklist)
+                        (cond [(empty? patts) (begin
+                                                (displayln "COULD NOT FIND RULE FOR INPUT")
+                                                (list TRS blacklist))]
+                              [(pattern->in-solved-form? (car patts)) (begin
+                                                                        (displayln (format "Pattern ~a in solved form" (termIR->halide (car patts))))
+                                                                        (f (cdr patts) TRS blacklist))]
+                              [(member-mod-alpha-renaming? (car patts) blacklist) (begin
+                                                                                    (displayln (format "Pattern ~a on blacklist" (termIR->halide (car patts))))
+                                                                                    (f (cdr patts) TRS blacklist))]
+                              [else (let ([synth-output (synth-rule-from-LHS-pattern (car patts) TRS blacklist)])
+                                      (cond [(rule? synth-output) (begin
+                                                                    (displayln (format "NEW RULE FOUND: ~a" (rule->halide-string synth-output)))
+                                                                    ;(list (append TRS (list synth-output)) blacklist updated-regression))]
+                                                                    (f patts (add-to-end TRS synth-output) blacklist))]
+                                            [(sigma-term? synth-output) (begin
+                                                                          (displayln (format "Could not find valid RHS for LHS ~a" (termIR->halide (car patts))))
+                                                                          (f (cdr patts) TRS (append blacklist (list synth-output))))]
+                                            [else (begin
+                                                    (displayln (format "Pattern ~a failed, continuing" (car patts)))
+                                                    (f (cdr patts) TRS blacklist))]))]))])
+            (f patterns current-TRS current-blacklist))))))
+
+(define (synthesis-over-inputs inputs current-TRS current-bl)
+  (letrec ([f (λ (exprs TRS bl)
+                (if (empty? exprs)
+                    (list TRS bl)
+                    (let ([one-iter-output (synthesis-iteration (car exprs) TRS bl)])
+                      (f (cdr exprs) (first one-iter-output) (second one-iter-output)))))])
+    (f inputs current-TRS current-bl)))
+
+;;;; regression tests
+(define (regression benchmarks TRS1 TRS2)
+  (letrec ([f (λ (exprs solved1 solved2 better worse)
+            (if (empty? exprs)
+                (list solved1 solved2 better worse)
+                (let* ([normed1 (varsolver-rewrite* "x" TRS1 (car exprs))]
+                       [normed2 (varsolver-rewrite* "x" TRS2 (car exprs))]
+                       [updated-solved1 (+ solved1
+                                           (if (termIR->in-solved-form? normed1 "x") 1 0))]
+                       [updated-solved2 (+ solved2
+                                           (if (termIR->in-solved-form? normed2 "x") 1 0))]
+                       [updated-better (+ better (if (terms->varsolver-reduction-order? "x" normed1 normed2) 1 0))]
+                       [updated-worse (+ worse (if (terms->varsolver-reduction-order? "x" normed2 normed1)
+                                                   (begin
+                                                     (displayln (format "WORSE ~a" (termIR->halide (car exprs)))) 1) 0))])
+                  (f (cdr exprs) updated-solved1 updated-solved2 updated-better updated-worse))))])
+    (let ([output (f benchmarks 0 0 0 0)])
+      (begin
+        (displayln (format "Prior TRS solved ~a benchmarks, current TRS solved ~a benchmarks of ~a"
+                           (first output) (second output) (length benchmarks)))
+        (displayln (format "Change to TRS moved ~a benchmarks in the right direction, ~a in the wrong direction"
+                           (third output) (fourth output)))))))
+
+;; assumes all rules have unique names
+(define (find-changed-rewrite-paths benchmarks TRS1 TRS2)
+  (let ([f (λ (expr)
+             (let ([rewritten1-output (varsolver-logging-rewrite* "x" TRS1 expr)]
+                   [rewritten2-output (varsolver-logging-rewrite* "x" TRS2 expr)])
+               (list (termIR->halide expr) (second rewritten1-output) (second rewritten2-output))))])
+    (filter (λ (histories) (not (equal? (second histories) (third histories)))) (map f benchmarks))))

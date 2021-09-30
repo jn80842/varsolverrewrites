@@ -3,7 +3,7 @@
 (provide (struct-out sigma-term))
 (provide (struct-out rule))
 (provide (struct-out eq-identity))
-(provide make-rule term-constant? term-variable? termIR->halide
+(provide make-rule make-identity term-constant? term-variable? termIR->halide
          termIR->variables termIR->in-solved-form? termIR->renamevars
          rename-to-fresh-vars term-size term-op-count cap-and-sort-terms-by-size
          contains-target-variable? is-tvar-matching?
@@ -30,6 +30,9 @@
 (struct trs (ruleset rule->string order-hash))
 
 (struct eq-identity (lhs rhs name) #:transparent)
+
+(define (make-identity t1 t2)
+  (eq-identity t1 t2 ""))
 
 ;; terms can be variables (string representation), integers, booleans (symbols 'true and 'false), or sigma-terms
 
