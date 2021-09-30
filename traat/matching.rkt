@@ -5,7 +5,7 @@
 (provide match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*
          unify varsolver-unify lift lift-pairs varsolver-rules-rewrite
-         varsolver-rules-rewrite*)
+         varsolver-rules-rewrite* varsolver-logging-rewrite*)
 
 ;; the unify algorithm relies on applying substitutions in a particular order,
 ;; so there are alternate implementations of indom, app, lift
@@ -193,8 +193,22 @@
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
                             (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
-                                               (rule->string r)))
+                                               (rule-name r))) ;(rule->string r)))
                             rewritten-input)
+                          ))))])
+    (f rules)))
+
+(define (rewrite-logging-parameterize matcher rules input [rule->string (λ (r) "")])
+  (letrec ([f (λ (ruleset)
+                (if (empty? ruleset) (list 'fail '()) ;; tried to match input to all rules and failed
+                    (let* ([r (car ruleset)]
+                           [subst (matcher (rule-lhs r) input)])
+                      (if (equal? subst 'fail) ;; this rule doesn't match input
+                          (f (cdr ruleset))
+                          (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
+                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                                               (rule->string r)))
+                            (list rewritten-input (rule-name r)))
                           ))))])
     (f rules)))
 
@@ -203,6 +217,8 @@
   ((curry rewrite-parameterize (curry varsolver-match tvar)) rules input rule->string))
 (define (varsolver-rules-rewrite rules input [rule->string (λ (r) "")])
   ((curry rewrite-parameterize varsolver-rules-match) rules input))
+(define (varsolver-logging-rewrite tvar rules input [rule->string (λ (r) "")])
+  ((curry rewrite-logging-parameterize (curry varsolver-match tvar)) rules input rule->string))
 ;; norm: (term * term) list -> term -> term
 ;; TRaAT calls this norm but it's a kleine closure on -->_R
 ;; rewrites an expression bottom-up
@@ -218,7 +234,23 @@
                             (f rewrite-output))))))])
     (f input)))
 
+(define (rewrite*-logging-parameterize rewriter rules input [rule->string (λ (r) "")])
+  (letrec ([f (λ (expr rule-history)
+                (if (or (term-variable? expr) (term-constant? expr)) (list expr '()) ;; when we hit a variable or constant, do nothing & go up the stack
+                    ;; fully normalize all the subterms
+                    (let* ([rewritten-args (map (λ (e) (f e '())) (sigma-term-term-list expr))]
+                           [updated-history (append rule-history (flatten (map second rewritten-args)))]
+                           [rewritten-term (sigma-term (sigma-term-symbol expr) (map first rewritten-args))])
+                      ;; if we can rewrite the new term, recurse, else we're done
+                      (let ([rewrite-output (rewriter rules rewritten-term rule->string)])
+                        (if (symbol? (first rewrite-output))
+                            (list rewritten-term (filter (λ (l) (not (empty? l))) updated-history))
+                            (f (first rewrite-output) (append updated-history (list (second rewrite-output)))))))))])
+    (f input '())))
+
 (define rewrite* (curry rewrite*-parameterize rewrite))
 (define (varsolver-rewrite* tvar rules input [rule->string (λ (r) "")])
   ((curry rewrite*-parameterize (curry varsolver-rewrite tvar)) rules input rule->string))
 (define varsolver-rules-rewrite* (curry rewrite*-parameterize varsolver-rules-rewrite))
+(define (varsolver-logging-rewrite* tvar rules input [rule->string (λ (r) "")])
+  ((curry rewrite*-logging-parameterize (curry varsolver-logging-rewrite tvar)) rules input rule->string))
