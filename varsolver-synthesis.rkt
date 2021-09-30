@@ -56,6 +56,8 @@
 (define (insert-target-var nv-list tarvar target-idx)
   (append (take nv-list target-idx) (list tarvar) (drop nv-list target-idx)))
 
+
+
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
 (define (synthesize-topn-rewrite LHS insn-count)
@@ -81,7 +83,9 @@
             (unless (void? model)
               (if (unsat? model)
                   (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-                  (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model) (evaluate root-op model)))))))))))
+                  (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model)
+                                                                           (evaluate root-op model)
+                                                                           (car target-variables) non-tvar-variables))))))))))
 
 (define (synth-topn-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)

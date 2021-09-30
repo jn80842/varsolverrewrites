@@ -59,9 +59,9 @@
                        (f (insn-arg3-idx current-insn))))))])
     (f (sketch-retval-idx sk))))
 
-(define (topn-sketch->halide-expr sk root-op-idx)
+(define (topn-sketch->halide-expr sk root-op-idx target-var non-target-vars)
   ((get-operator-string-function-by-idx (sketch-operator-list sk) root-op-idx)
-   "t0" (sketch->halide-expr sk (map (λ (i) (format "n~a" i)) (range (sketch-input-count sk))))))
+    target-var (sketch->halide-expr sk non-target-vars)))
 
 #;(define (topn-sketch->halide-expr sk root-op-idx)
   (letrec ([f (λ (i)
