@@ -243,7 +243,7 @@
 (define (get-dps-ordered-variables t)
   (letrec ([f (λ (t)
                 (cond [(term-variable? t) (list t)]
-                      [(term-constant? t) '()]
+                      [(term-constant? t) (list "b")]
                       [(sigma-term? t) (map f (sigma-term-term-list t))]
                       [else '()]))])
     (flatten (f t))))
