@@ -185,7 +185,7 @@
                                                                           (displayln (format "Could not find valid RHS for LHS ~a" (termIR->halide (car patts))))
                                                                           (f (cdr patts) TRS (append blacklist (list synth-output))))]
                                             [else (begin
-                                                    (displayln (format "Pattern ~a failed, continuing" (car patts)))
+                                                    (displayln (format "Pattern ~a failed, continuing" (termIR->halide (car patts))))
                                                     (f (cdr patts) TRS blacklist))]))]))])
             (f patterns current-TRS current-blacklist))))))
 

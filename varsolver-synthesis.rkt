@@ -75,9 +75,8 @@
                  [evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar non-tarvars)]
                  [evaled-LHS (apply (termIR->function LHS LHS-variables)
                                     (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
-                 [model (time (with-handlers ([(λ (e) #t)
-                                               (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
-                                                                   (termIR->halide LHS) insn-count)))])
+                 [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                 (synthesize #:forall (cons tarvar non-tarvars)
                                             #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
             (unless (void? model)
@@ -111,12 +110,12 @@
                  [evaled-LHS (apply (termIR->function LHS LHS-variables)
                                     (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
                  [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
-                 [model (time (with-handlers ([(λ (e) #t)
-                                               (λ (e) (displayln (format "Timeout searching for n-only RHS for ~a with insn count ~a"
-                                                                   (termIR->halide LHS) insn-count)))])
+                 [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                 (synthesize #:forall (cons tarvar non-tarvars)
                                             #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
-            (unless (void? model)
+            (if (void? model)
+                (displayln (format "Synthesis threw an error while finding n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
               (if (unsat? model)
                   (displayln (format "Could not find n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
                   (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-variables))))))))))
