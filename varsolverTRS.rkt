@@ -251,14 +251,16 @@
 (define (move-tvar-left-reduction-order? r)
   (let ([vars-lhs (get-dps-ordered-variables (rule-lhs r))]
         [vars-rhs (get-dps-ordered-variables (rule-rhs r))]
-        [get-var-string (λ (l) (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) ""))])
+        [get-var-string (λ (l) (string-trim (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) "")
+                                            "b" #:left? #f #:repeat? #t))])
     (and (equal? (filter is-tvar-matching? vars-lhs) (filter is-tvar-matching? vars-rhs))
          (string<? (get-var-string vars-rhs) (get-var-string vars-lhs)))))
 
 (define (move-tvar-left-reduction-order-equal? r)
   (let ([vars-lhs (get-dps-ordered-variables (rule-lhs r))]
         [vars-rhs (get-dps-ordered-variables (rule-rhs r))]
-        [get-var-string (λ (l) (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) ""))])
+        [get-var-string (λ (l) (string-trim (string-join (map (λ (s) (if (is-tvar-matching? s) "a" "b")) l) "")
+                                            "b" #:left? #f #:repeat? #t))])
     (and (equal? (filter is-tvar-matching? vars-lhs) (filter is-tvar-matching? vars-rhs))
          (equal? (get-var-string vars-rhs) (get-var-string vars-lhs)))))
 
