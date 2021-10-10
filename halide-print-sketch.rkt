@@ -33,8 +33,9 @@
   (case (get-operator-arity-by-idx (insn-op-idx i))
     [(1) (format "R~a" (number->string (insn-arg1-idx i)))]
     [(2) (format "R~a R~a" (number->string (insn-arg1-idx i)) (number->string (insn-arg2-idx i)))]
-    [(3) (format "R~a R~a R~a" (number->string (insn-arg1-idx i))
-                 (number->string (insn-arg2-idx i)) (number->string (insn-arg3-idx i)))]))
+   ; [(3) (format "R~a R~a R~a" (number->string (insn-arg1-idx i))
+   ;              (number->string (insn-arg2-idx i)) (number->string (insn-arg3-idx i)))]
+    ))
 
 (define (print-topn-sketch sk op-idx)
   (displayln (string-join (topn-sketch->string sk op-idx) "\n")))
@@ -56,7 +57,8 @@
                       ((get-operator-string-function-by-idx (sketch-operator-list sk) (insn-op-idx current-insn))
                        (f (insn-arg1-idx current-insn))
                        (f (insn-arg2-idx current-insn))
-                       (f (insn-arg3-idx current-insn))))))])
+                      ; (f (insn-arg3-idx current-insn))
+                       ))))])
     (f (sketch-retval-idx sk))))
 
 (define (topn-sketch->halide-expr sk root-op-idx target-var non-target-vars)

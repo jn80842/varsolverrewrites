@@ -19,19 +19,20 @@
   (define-symbolic* b boolean?)
   b)
 
-(struct insn (op-idx arg1-idx arg2-idx arg3-idx) #:transparent)
+(struct insn (op-idx arg1-idx arg2-idx) #:transparent)
 
 (define (call-insn operator-list i registers)
   ((get-operator-function-by-idx operator-list (insn-op-idx i)) (list-ref registers (insn-arg1-idx i))
                                                   (list-ref registers (insn-arg2-idx i))
-                                                  (list-ref registers (insn-arg3-idx i))))
+                                                ;  (list-ref registers (insn-arg3-idx i))
+                                                  ))
 
 (define (get-sym-insn)
   (define-symbolic* op integer?)
   (define-symbolic* arg1 integer?)
   (define-symbolic* arg2 integer?)
-  (define-symbolic* arg3 integer?)
-  (insn op arg1 arg2 arg3))
+;  (define-symbolic* arg3 integer?)
+  (insn op arg1 arg2)) ; arg3))
 
 (struct sketch (operator-list insn-list retval-idx input-count) #:transparent)
 
