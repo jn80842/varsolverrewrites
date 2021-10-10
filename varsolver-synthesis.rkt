@@ -61,6 +61,8 @@
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
 (define (synthesize-topn-rewrite LHS insn-count)
+  (begin
+    (clear-vc!)
   (let* ([LHS-variables (termIR->variables LHS)]
          [target-variables (filter is-tvar-matching? LHS-variables)]
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
@@ -68,7 +70,7 @@
     (if (not (equal? (length target-variables) 1))
         (void)
         (begin
-          (clear-asserts!)
+          (clear-vc!)
           (define-symbolic* tarvar integer?)
           (define-symbolic* root-op integer?)
           (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
@@ -80,11 +82,11 @@
                                 (synthesize #:forall (cons tarvar non-tarvars)
                                             #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
             (unless (void? model)
-              (if (unsat? model)
+              (if (or (unsat? model) (unknown? model))
                   (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
                   (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model)
                                                                            (evaluate root-op model)
-                                                                           (car target-variables) non-tvar-variables))))))))))
+                                                                           (car target-variables) non-tvar-variables)))))))))))
 
 (define (synth-topn-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
@@ -97,6 +99,7 @@
     (f 0)))
 
 (define (synthesize-nonly-rewrite LHS insn-count)
+  (begin (clear-vc!)
   (let* ([LHS-variables (termIR->variables LHS)]
          [target-variables (filter is-tvar-matching? LHS-variables)]
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
@@ -104,7 +107,7 @@
     (if (not (equal? (length target-variables) 1))
         (void)
         (begin
-          (clear-asserts!)
+          (clear-vc!)
           (define-symbolic* tarvar integer?)
           (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
                  [evaled-LHS (apply (termIR->function LHS LHS-variables)
@@ -113,12 +116,14 @@
                  [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                               [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                 (synthesize #:forall (cons tarvar non-tarvars)
-                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))
+                                )
+                              )])
             (if (void? model)
                 (displayln (format "Synthesis threw an error while finding n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-              (if (unsat? model)
+              (if (or (unsat? model) (unknown? model))
                   (displayln (format "Could not find n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-                  (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-variables))))))))))
+                  (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-variables)))))))))))
 
 (define (synth-nonly-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
@@ -136,7 +141,7 @@
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)])
     (if (not (equal? (length target-variables) 1))
         #f
-        (begin (clear-asserts!)
+        (begin (clear-vc!)
                (define-symbolic* tarvar integer?)
                (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
                       [evaled-LHS (apply (termIR->function LHS LHS-variables)
