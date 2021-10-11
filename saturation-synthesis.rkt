@@ -5,6 +5,7 @@
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
 (require "varsolver-synthesis.rkt")
+(require "fixed-sketch-synthesis.rkt")
 
 (provide (all-defined-out))
 
@@ -55,9 +56,9 @@
 (define (synthesize-rule LHS)
   (let* ([LHS-variables (termIR->variables LHS)]
                [LHS-op-count (term-op-count LHS)]
-               [nonly-output (synth-nonly-over-insn-count-range LHS (max 5 (add1 LHS-op-count)))])
+               [nonly-output (synth-nonly-over-insn-count-range LHS (max 3 (add1 LHS-op-count)))])
           (if (equal? 'fail nonly-output)
-              (synth-topn-over-insn-count-range LHS (max 5 LHS-op-count))
+               (synthesize-from-fixed-metasketches LHS) ;(synth-topn-over-insn-count-range LHS (max 3 LHS-op-count))
               nonly-output)))
 
 ;; pattern should use rule var naming conventions distinct from t0/n0/x scheme
@@ -189,13 +190,13 @@
                                                     (f (cdr patts) TRS blacklist))]))]))])
             (f patterns current-TRS current-blacklist))))))
 
-(define (synthesis-over-inputs inputs current-TRS current-bl)
-  (letrec ([f (λ (exprs TRS bl)
-                (if (empty? exprs)
-                    (list TRS bl)
-                    (let ([one-iter-output (synthesis-iteration (car exprs) TRS bl)])
-                      (f (cdr exprs) (first one-iter-output) (second one-iter-output)))))])
-    (f inputs current-TRS current-bl)))
+(define (recursive-synthesis inputs input-TRS input-blacklist [input-regression '()])
+  (letrec ([f (λ (exprs TRS blacklist)
+              (if (empty? exprs)
+                  (list TRS blacklist)
+                  (let ([t-b-r (synthesis-iteration (car exprs) TRS blacklist)])
+                    (f (cdr exprs) (first t-b-r) (second t-b-r)))))])
+    (f inputs input-TRS input-blacklist)))
 
 ;;;; regression tests
 (define (regression benchmarks TRS1 TRS2)
