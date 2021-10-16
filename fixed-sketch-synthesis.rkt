@@ -50,31 +50,31 @@
 (define (3op-patt1 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list arg1 arg2)) (sigma-term op3 (list arg3 arg4)))))
 (define (3op-patt1-func op1 op2 op3 arg1 arg2 arg3 arg4)
-  (op1 (op2 (list arg1 arg2)) (op3 (list arg3 arg4))))
+  (op1 (op2 arg1 arg2) (op3 arg3 arg4)))
 (define 3op-patt1-metasketch (fixed-metasketch 3op-patt1 3op-patt1-func 3 4))
 
 (define (3op-patt2 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list arg1 (sigma-term op2 (list arg2 (sigma-term op3 (list arg3 arg4)))))))
 (define (3op-patt2-func op1 op2 op3 arg1 arg2 arg3 arg4)
-  (op1 (list arg1 (op2 (list arg2 (op3 (list arg3 arg4)))))))
+  (op1 arg1 (op2 arg2 (op3 arg3 arg4))))
 (define 3op-patt2-metasketch (fixed-metasketch 3op-patt2 3op-patt2-func 3 4))
 
 (define (3op-patt3 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list arg1 (sigma-term op2 (list (sigma-term op3 (list arg2 arg3)) arg4)))))
 (define (3op-patt3-func op1 op2 op3 arg1 arg2 arg3 arg4)
-  (op1 (list arg1 (op2 (list (op3 arg2 arg3) arg4)))))
+  (op1 arg1 (op2 (op3 arg2 arg3) arg4)))
 (define 3op-patt3-metasketch (fixed-metasketch 3op-patt3 3op-patt3-func 3 4))
 
 (define (3op-patt4 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list arg1 (sigma-term op3 (list arg2 arg3)))) arg4)))
 (define (3op-patt4-func op1 op2 op3 arg1 arg2 arg3 arg4)
-  (op1 (list (op2 (list arg1 (op3 (list arg2 arg3)))) arg4)))
+  (op1 (op2 arg1 (op3 arg2 arg3)) arg4))
 (define 3op-patt4-metasketch (fixed-metasketch 3op-patt4 3op-patt4-func 3 4))
 
 (define (3op-patt5 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list (sigma-term op3 (list arg1 arg2)) arg3)) arg4)))
 (define (3op-patt5-func op1 op2 op3 arg1 arg2 arg3 arg4)
-  (op1 (list (op2 (list (op3 arg1 arg2) arg3)) arg4)))
+  (op1 (op2 (op3 arg1 arg2) arg3) arg4))
 (define 3op-patt5-metasketch (fixed-metasketch 3op-patt5 3op-patt5-func 3 4))
 
 (define all-fixed-metasketches
