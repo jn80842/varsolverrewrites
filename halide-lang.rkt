@@ -89,18 +89,25 @@
   (if (and (integer? i1) (integer? i2))
       (euclidean-div i1 i2)
       'error))
+;;;;;;;; IMPORTANT ;;;;;;;
+;; this is not the correct semantics in Racket over concrete values
+;; but will produce queries using the SMTLIB2 div/mod operators
+;; using my local patched version of Rosette ONLY
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define (hld-div i1 i2 [i3 0])
-  (if (equal? i2 0)
-      0
-      (quotient i1 i2)))
+  (quotient i1 i2))
 
 (define (hld-div->string i1 i2 [i3 ""])
   (format "(~a / ~a)" i1 i2))
 
-(define (hld-mod i1 i2 [i3 0])
+#;(define (hld-mod i1 i2 [i3 0])
   (if (and (integer? i1) (integer? i2))
       (euclidean-mod i1 i2)
       'error))
+
+(define (hld-mod i1 i2 [i3 0])
+  (modulo i1 i2))
 
 (define (hld-mod->string i1 i2 [i3 ""])
   (format "(~a % ~a)" i1 i2))
@@ -238,8 +245,8 @@
   (list add-operator ;; 0
         sub-operator ;; 1
         mul-operator ;; 2
-      ;  div-operator ;; 3
-      ;  mod-operator ;; 4
+        div-operator ;; 3
+        mod-operator ;; 4
         min-operator ;; 5 / 3
         max-operator ;; 6 / 4
         eqi-operator ;; 7 / 5
