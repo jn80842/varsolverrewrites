@@ -5,7 +5,7 @@
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
 (require "varsolver-synthesis.rkt")
-(require "fixed-sketch-synthesis.rkt")
+(require "typed-fixed-sketch-synthesis.rkt")
 
 (provide (all-defined-out))
 

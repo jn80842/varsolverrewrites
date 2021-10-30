@@ -1,7 +1,7 @@
 #lang rosette
 
-(require "halide-lang.rkt")
-(require "halide-sketch.rkt")
+(require "typed-halide-lang.rkt")
+(require "typed-halide-sketch.rkt")
 (require "halide-print-sketch.rkt")
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
@@ -23,31 +23,6 @@
     (if (unsat? model)
         (displayln "Could not find an equivalent RHS")
         (displayln (print-sketch (evaluate sk model))))))
-
-(define LHS1
-  (λ (i1 i2 i3)
-    (hld-add (hld-mul i1 i2) (hld-mul i1 i3))))
-
-(define sk1 (get-symbolic-sketch operator-list 3 3))
-
-(define-symbolic* i1 integer?)
-(define-symbolic* i2 integer?)
-(define-symbolic* i3 integer?)
-
-(define inputs (list i1 i2 i3))
-
-;(synthesize-rewrite LHS1 sk1 (list i1 i2 i3))
-
-;; (rewrite(max(t0 + n0, t0 + n1), (t0 + max(n0, n1)), "coqMax396c"))
-
-(define LHS2
-  (λ (t0 n0 n1) (max (+ t0 n0) (+ t0 n1))))
-
-(define-symbolic* sym-op-idx integer?)
-
-(define sk2 (get-symbolic-sketch operator-list 2 2))
-
-(define-symbolic* sym-tarvar integer?)
 
 (define (pull-out-target-var var-list target-idx)
   (let ([size (length var-list)])
