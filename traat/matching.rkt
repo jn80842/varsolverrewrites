@@ -207,7 +207,7 @@
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
                             (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
-                                               (rule->string r)))
+                                               (rule-name r)))
                             (list rewritten-input (rule-name r)))
                           ))))])
     (f rules)))
@@ -236,16 +236,17 @@
 
 (define (rewrite*-logging-parameterize rewriter rules input [rule->string (λ (r) "")])
   (letrec ([f (λ (expr rule-history)
-                (if (or (term-variable? expr) (term-constant? expr)) (list expr '()) ;; when we hit a variable or constant, do nothing & go up the stack
+                (if (or (term-variable? expr) (term-constant? expr)) (list expr rule-history) ;; when we hit a variable or constant, do nothing & go up the stack
                     ;; fully normalize all the subterms
                     (let* ([rewritten-args (map (λ (e) (f e '())) (sigma-term-term-list expr))]
                            [updated-history (append rule-history (flatten (map second rewritten-args)))]
                            [rewritten-term (sigma-term (sigma-term-symbol expr) (map first rewritten-args))])
                       ;; if we can rewrite the new term, recurse, else we're done
-                      (let ([rewrite-output (rewriter rules rewritten-term rule->string)])
+                      (let* ([rewrite-output (rewriter rules rewritten-term rule->string)]
+                             [history2 (filter (λ (l) (not (empty? l))) (append updated-history (list (second rewrite-output))))])
                         (if (symbol? (first rewrite-output))
-                            (list rewritten-term (filter (λ (l) (not (empty? l))) updated-history))
-                            (f (first rewrite-output) (append updated-history (list (second rewrite-output)))))))))])
+                            (list rewritten-term history2)
+                            (f (first rewrite-output) history2))))))])
     (f input '())))
 
 (define rewrite* (curry rewrite*-parameterize rewrite))
