@@ -136,7 +136,7 @@
 
 ;; bool -> int -> int -> int
 (define (hld-seli i1 i2 i3)
-  (if (and (bool-register? i1) (and (int-register? i1) (int-register? i2)))
+  (if (and (bool-register? i1) (and (int-register? i2) (int-register? i3)))
       (register 'int (if (register-value i1) (register-value i2) (register-value i3)))
       error-register))
 
@@ -145,7 +145,7 @@
 
 ;; bool -> bool -> bool -> bool
 (define (hld-selb i1 i2 i3)
-  (if (and (bool-register? i1) (and (bool-register? i1) (bool-register? i2)))
+  (if (and (bool-register? i1) (and (bool-register? i2) (bool-register? i3)))
       (register 'bool (register-value i1) (register-value i2) (register-value i3))
       error-register))
 
