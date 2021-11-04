@@ -10,7 +10,8 @@
          get-symbolic-sketch
          get-sketch-function
          get-topn-sketch-function
-         termIR->function)
+         termIR->function
+         termIR->typecheck?)
 
 (define (get-sym-int)
   (define-symbolic* x integer?)
@@ -98,3 +99,7 @@
                                               (map (curry f inputs) (sigma-term-term-list t)))]
                       [else 'fail]))])
     (λ inputs (register-value (f (map get-register inputs) t)))))
+
+(define (termIR->typecheck? term)
+  (let ([vars (termIR->variables term)])
+   (not (equal? 'error (apply (termIR->function term vars) (range (length vars)))))))
