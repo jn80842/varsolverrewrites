@@ -14,7 +14,7 @@
 (define (error-register? reg)
   (eq? (register-type reg) 'error))
 
-(define error-register (register 'error 0))
+(define error-register (register 'error 'error))
 
 (define (div-in-Z-val x y)
   (if (= (modulo x y) 0) 0 1))

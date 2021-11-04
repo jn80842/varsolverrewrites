@@ -5,6 +5,7 @@
 (require "halide-parser.rkt")
 (require "varsolverTRS.rkt")
 (require "varsolver-synthesis.rkt")
+(require "typed-halide-sketch.rkt")
 (require "typed-fixed-sketch-synthesis.rkt")
 
 (provide (all-defined-out))
@@ -171,6 +172,9 @@
                         (cond [(empty? patts) (begin
                                                 (displayln "COULD NOT FIND RULE FOR INPUT")
                                                 (list TRS blacklist))]
+                              [(not (termIR->typecheck? (car patts))) (begin
+                                                                        (displayln (format "Pattern ~a did not typecheck" (termIR->halide (car patts))))
+                                                                        (f (cdr patts) TRS blacklist))]
                               [(pattern->in-solved-form? (car patts)) (begin
                                                                         (displayln (format "Pattern ~a in solved form" (termIR->halide (car patts))))
                                                                         (f (cdr patts) TRS blacklist))]
