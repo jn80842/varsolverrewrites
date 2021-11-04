@@ -69,7 +69,9 @@
          [LHS-variables (termIR->variables LHS)])
     (let-values ([(target-variables ntvar-variables) (partition is-tvar-matching? LHS-variables)])
       (displayln (format "CANDIDATE LHS ~a" (termIR->halide LHS)))
-      (cond [(termIR->rule-in-solved-form? LHS) (displayln (format "~a candidate LHS already in solved form"
+      (cond [(> (length target-variables) 1) (displayln "Fixed sketch synthesis not implemented for multiple target variables")
+                                             'pass]
+            [(termIR->rule-in-solved-form? LHS) (displayln (format "~a candidate LHS already in solved form"
                                                                    (termIR->halide LHS)))
                                                 'pass]
             [(member-mod-alpha-renaming? LHS blacklist) (begin
