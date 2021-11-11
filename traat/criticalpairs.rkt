@@ -7,7 +7,8 @@
 (provide (struct-out critical-pair))
 (provide CP CPs critical-pairs2 critical-pairs
          top-level-critical-pairs joinable? solved-joinable?
-         get-cp-divergent-terms get-cp-equality)
+         get-cp-divergent-terms get-cp-equality
+         trivial-critical-pair?)
 
 (struct critical-pair (rule1 rule2 subst) #:transparent)
 
@@ -45,8 +46,13 @@
   (critical-pairs2 ruleset ruleset))
 
 ;; this holds for mappings where one key is mapped to mutiple unique terms, which are not trivial
-(define (trivial-critical-pair? cp)
+#;(define (trivial-critical-pair? cp)
   (andmap (λ (p) (and (term-variable? (car p)) (term-variable? (cdr p)))) (critical-pair-subst cp)))
+(define (trivial-critical-pair? cp)
+  (let ([subst-range (map cdr (critical-pair-subst cp))])
+    (and (equal? (rule-name (critical-pair-rule1 cp)) (rule-name (critical-pair-rule2 cp)))
+         (andmap term-variable? subst-range)
+         (not (check-duplicates subst-range)))))
 
 (define (top-level-CPs ruleset r)
   (let* ([varmap-term-pair (rename-to-tarvar-aware-vars (rule-lhs r) (make-hash '()))]
