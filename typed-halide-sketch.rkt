@@ -11,7 +11,8 @@
          get-sketch-function
          get-topn-sketch-function
          termIR->function
-         termIR->typecheck?)
+         termIR->typecheck?
+         termIR->contains-div-mod?)
 
 (define (get-sym-int)
   (define-symbolic* x integer?)
@@ -103,3 +104,11 @@
 (define (termIR->typecheck? term)
   (let ([vars (termIR->variables term)])
    (not (equal? 'error (apply (termIR->function term vars) (range (length vars)))))))
+
+(define (termIR->contains-div-mod? term)
+  (letrec ([f (λ (t)
+                (cond [(or (term-variable? t) (term-constant? t)) #f]
+                      [(and (sigma-term? t) (or (equal? (sigma-term-symbol t) '/)
+                                                (equal? (sigma-term-symbol t) '%))) #t]
+                      [else (ormap identity (map f (sigma-term-term-list t)))]))])
+    (or (f term))))

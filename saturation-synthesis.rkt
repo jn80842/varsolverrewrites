@@ -174,6 +174,9 @@
                         (cond [(empty? patts) (begin
                                                 (displayln "COULD NOT FIND RULE FOR INPUT")
                                                 (list TRS blacklist))]
+                              [(termIR->contains-div-mod? (car patts)) (begin
+                                                                         (displayln (format "Pattern ~a contains div or mod so is being skipped" (termIR->halide (car patts))))
+                                                                         (f (cdr patts) TRS blacklist))]
                               [(not (termIR->typecheck? (car patts))) (begin
                                                                         (displayln (format "Pattern ~a did not typecheck" (termIR->halide (car patts))))
                                                                         (f (cdr patts) TRS blacklist))]
