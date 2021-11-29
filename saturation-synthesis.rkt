@@ -3,7 +3,7 @@
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 (require "halide-parser.rkt")
-(require "varsolverTRS.rkt")
+(require "rule-orders.rkt")
 (require "varsolver-synthesis.rkt")
 (require "typed-halide-sketch.rkt")
 (require "typed-fixed-sketch-synthesis.rkt")
@@ -11,7 +11,7 @@
 (provide (all-defined-out))
 
 #;(provide find-all-patterns find-all-subterms synthesize-rule
-         synth-rule-from-LHS-pattern saturating-synthesis termIR->rule-style-varnames)
+         synth-rule-from-LHS-pattern termIR->rule-style-varnames)
 
 ;; find all patterns that can match the full input term
 ;; NB: we always replace the same expr with the same variable
@@ -86,61 +86,6 @@
 
 (define (termIR->rule-style-varnames term [var-hash (make-hash '())])
   (cdr (rename-to-tarvar-aware-vars term var-hash (list "t" "n" "v"))))
-
-;; saturating synthesis algo
-;; parameters:
-;; top size of LHS term (15)
-;; max insn count for n-only (op count of LHS + 1) and t-op-n sketches (op count of LHS)
-(define (saturating-synthesis input tvar TRS blacklist)
-  (letrec ([f (λ (input subtrees patterns TRS blacklist)
-                                 (cond [(and (empty? subtrees)
-                                             (empty? patterns)) (begin
-                                                                  (displayln "CHECKED ALL SUBTREES/PATTERNS")
-                                                                  (cons TRS blacklist))]
-                                       [(empty? patterns) (begin
-                                                            (displayln (format "SUBTERM ~a:" (termIR->halide (car subtrees))))
-                                                            (f input (cdr subtrees) (find-all-patterns (car subtrees) tvar 15) TRS blacklist))]
-                                       [(termIR->rule-in-solved-form? (car patterns)) (begin
-                                                                                        (displayln (format "~a candidate LHS already in solved form" (termIR->halide (car patterns))))
-                                                                                        (f input subtrees (cdr patterns) TRS blacklist))]
-                                       [(member-mod-alpha-renaming? (car patterns) blacklist) (begin
-                                                                                                (displayln (format "LHS ON BLACKLIST: ~a" (termIR->halide (car patterns))))
-                                                                                                (f input subtrees (cdr patterns) TRS blacklist))]
-                                       [(not (termIR->typechecks? (car patterns))) (begin
-                                                                                     (displayln (format "PATTERN ~a DOES NOT TYPECHECK; ADDING TO BLACKLIST" (termIR->halide (car patterns))))
-                                                                                     (f input subtrees (cdr patterns) TRS (cons (termIR->rule-style-varnames (car patterns)) blacklist)))]
-                                       [else   (displayln (format "Synthesize RHS for candidate LHS ~a?" (termIR->halide (termIR->rule-style-varnames (car patterns)))))
-                                               (let ([cmd-input (read)])
-                                                 (if (equal? 'stop cmd-input)
-                                                     (cons TRS (cons (termIR->rule-style-varnames (car patterns)) blacklist))
-                                                     (if (not (equal? 'y cmd-input))
-                                                         (begin (displayln "Skipping synthesis")
-                                                                (f input subtrees (cdr patterns) TRS (cons (termIR->rule-style-varnames (car patterns)) blacklist)))
-                                                         (let ([result (synth-rule-from-LHS-pattern (car patterns) TRS blacklist)])
-                                                           (if (equal? 'pass result)
-                                                               (f input subtrees (cdr patterns) TRS blacklist)
-                                                               (if (sigma-term? result)
-                                                                   (begin
-                                                                     (displayln (format "ADDING ~a TO BLACKLIST" (termIR->halide result)))
-                                                                     (f input subtrees (cdr patterns) TRS (cons result blacklist)))
-                                                                   (let* ([updated-TRS (append TRS (list result))]
-                                                                          [normed-input (varsolver-rewrite* tvar updated-TRS input)])
-                                                                     (begin
-                                                                       (displayln (format "LEARNED NEW RULE ~a --> ~a" (termIR->halide (rule-lhs result))
-                                                                                          (termIR->halide (rule-rhs result))))
-                                                                       (if (termIR->in-solved-form? normed-input tvar)
-                                                                           (begin
-                                                                             (displayln (format "INPUT ~a NOW SOLVED TO ~a" (termIR->halide input) (termIR->halide normed-input)))
-                                                                             (cons updated-TRS blacklist))
-                                                                           (begin
-                                                                             (displayln (format "NOW SOLVING FOR ~a" (termIR->halide normed-input)))
-                                                                             (f normed-input (find-all-subterms-for-synthesis normed-input tvar 15)
-                                                                                '() updated-TRS blacklist)))))))))))
-                                             ]))])
-    (let ([normed-init-input (varsolver-rewrite* tvar TRS input)])
-      (if (termIR->in-solved-form? normed-init-input tvar)
-          (displayln "Initial input is solved by existing TRS")
-          (f normed-init-input (find-all-subterms-for-synthesis normed-init-input tvar 15) '() TRS blacklist)))))
 
 ;;;; helpers
 (define (terms->varsolver-reduction-order? target-variable t1 t2)

@@ -1,7 +1,7 @@
 #lang racket
 
-(require "halide-parser.rkt")
-(require "traat/termIR.rkt")
+(require "../halide-parser.rkt")
+(require "../traat/termIR.rkt")
 
 (provide coqaxiomTRS)
 

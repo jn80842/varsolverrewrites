@@ -2,7 +2,7 @@
 
 (require "termIR.rkt")
 
-(provide match rewrite rewrite*
+(provide lift match rewrite rewrite*
          varsolver-match varsolver-rewrite varsolver-rewrite*
          unify varsolver-unify lift lift-pairs varsolver-rules-rewrite
          varsolver-rules-rewrite* varsolver-logging-rewrite*)
@@ -192,7 +192,7 @@
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
-                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                            #;(displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
                                                (rule-name r))) ;(rule->string r)))
                             rewritten-input)
                           ))))])
@@ -206,7 +206,7 @@
                       (if (equal? subst 'fail) ;; this rule doesn't match input
                           (f (cdr ruleset))
                           (let ([rewritten-input (lift subst (rule-rhs r))]) ;; this rule does match, return rewritten input
-                            (displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
+                            #;(displayln (format "~a -> ~a via ~a" (termIR->halide input) (termIR->halide rewritten-input)
                                                (rule-name r)))
                             (list rewritten-input (rule-name r)))
                           ))))])

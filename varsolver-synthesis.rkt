@@ -4,7 +4,7 @@
 (require "typed-halide-sketch.rkt")
 (require "halide-print-sketch.rkt")
 (require "halide-parser.rkt")
-(require "varsolverTRS.rkt")
+(require "rule-orders.rkt")
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 
@@ -229,5 +229,3 @@
 (make-rule (halide->termIR "((t0 * n0) + (t0 * n1))") (halide->termIR "(t0 * (n0 + n1))"))
 (make-rule (halide->termIR "((t0 || n0) || n1)") (halide->termIR "(t0 || (n1 || n0))"))
 ))
-
-;;(benchmark-TRS (append batch1-rules originalvarsolverTRS ))

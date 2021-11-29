@@ -3,7 +3,7 @@
 (require "halide-lang.rkt")
 (require "halide-parser.rkt")
 (require "halide-sketch.rkt")
-(require "varsolverTRS.rkt")
+(require "rule-orders.rkt")
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 
