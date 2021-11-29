@@ -2,9 +2,9 @@
 
 (require rackunit)
 
-(require "traat/termIR.rkt")
-(require "halide-parser.rkt")
-(require "varsolver-synthesis.rkt")
+(require "../traat/termIR.rkt")
+(require "../halide-parser.rkt")
+(require "../varsolver-synthesis.rkt")
 
 (define expr1 (halide->termIR "n0 + ((n1 * 0) + (t0 - n0))"))
 

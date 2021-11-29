@@ -66,7 +66,7 @@
 (define (get-topn-sketch-function sk op-idx)
   (λ (tarvar . inputs) 
     (register-value ((get-operator-function-by-idx (sketch-operator-list sk) op-idx)
-                     (register-value tarvar) (get-register (apply (get-sketch-function sk) inputs)) 0))))
+                     (get-register tarvar) (get-register (apply (get-sketch-function sk) inputs)) 0))))
 
 (define variable-list (list "x" "y" "z"))
 (define constant-list (list 0 1 2 -1 #t #f))
@@ -95,7 +95,7 @@
                 (cond [(term-variable? t) (list-ref inputs (index-of variable-list t))]
                       [(equal? 'true t) #t]
                       [(equal? 'false t) #f]
-                      [(term-constant? t) t]
+                      [(term-constant? t) (get-register t)]
                       [(sigma-term? t) (apply (hash-ref operator-lookup (sigma-term-symbol t))
                                               (map (curry f inputs) (sigma-term-term-list t)))]
                       [else 'fail]))])

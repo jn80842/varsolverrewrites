@@ -1,8 +1,8 @@
 #lang rosette
 
 (require rackunit)
-(require "traat/termIR.rkt")
-(require "halide-sketch.rkt")
+(require "../traat/termIR.rkt")
+(require "../halide-sketch.rkt")
 
 ;; this is definitely failing
 (define f (termIR->function (sigma-term '/ (list (sigma-term '+ (list (sigma-term '* '("t0" -1)) "n0")) "n1")) (list "t0" "n0" "n1")))

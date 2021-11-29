@@ -1,7 +1,7 @@
 #lang racket
 
 (require rackunit)
-(require "halide-parser.rkt")
+(require "../halide-parser.rkt")
 
 (check-true (halide-expr-in-solved-form? "t0"))
 (check-true (halide-expr-in-solved-form? "n0 + n1"))

@@ -40,7 +40,9 @@
                         (sigma-term sym args1)
                         (let ([arg-versions (outer (car args2))])
                           (map (λ (a) (inner sym (append args1 (list a)) (cdr args2))) arg-versions))))])
-    (cap-and-sort-terms-by-size max-size (filter (λ (t) (not (term-variable? t))) (flatten (map outer (find-all-subterms term)))))))
+    (cap-and-sort-terms-by-size max-size (filter (λ (t) (not (term-variable? t)))
+                                                 (flatten (map outer (find-all-subterms term)))
+                                                 ))))
 
 (define (find-all-subterms term)
   (letrec ([f (λ (tprime)

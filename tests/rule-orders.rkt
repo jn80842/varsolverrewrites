@@ -1,9 +1,10 @@
 #lang racket
 
 (require rackunit)
-(require "traat/matching.rkt")
-(require "halide-parser.rkt")
-(require "rule-orders.rkt")
+(require "../traat/termIR.rkt")
+(require "../traat/matching.rkt")
+(require "../halide-parser.rkt")
+(require "../rule-orders.rkt")
 
 (define vssub279-rule (rule (halide->termIR "(t0 * x) - (t0 * y)")
                             (halide->termIR "t0 * (x - y)") "vssub279"))
