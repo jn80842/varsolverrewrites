@@ -17,6 +17,9 @@
 ;; NB: we always replace the same expr with the same variable
 ;; so "((x*y) + (x*y))" will not produce the pattern "v0 + v1" even though it could match it
 (define (find-all-patterns term tvar max-size)
+  (find-all-patterns-list (filter (λ (t) (< (term-size t) max-size)) (find-all-subterms term)) tvar))
+
+(define (find-all-patterns-list term-list tvar)
   (define t-counter 0)
   (define n-counter 0)
   (define expr-to-var (make-hash '()))
@@ -40,9 +43,17 @@
                         (sigma-term sym args1)
                         (let ([arg-versions (outer (car args2))])
                           (map (λ (a) (inner sym (append args1 (list a)) (cdr args2))) arg-versions))))])
-    (cap-and-sort-terms-by-size max-size (filter (λ (t) (not (term-variable? t)))
-                                                 (flatten (map outer (find-all-subterms term)))
-                                                 ))))
+    (filter (λ (t) (not (term-variable? t))) (flatten (map outer term-list)))))
+
+(define (find-all-patterns-to-match-term term tvar)
+  (find-all-patterns-list (list term) tvar))
+
+(define (find-all-subterms-bottom-up term)
+  (letrec ([f (λ (tprime)
+                (if (or (term-variable? tprime) (term-constant? tprime))
+                    '()
+                    (append (flatten (map f (sigma-term-term-list tprime))) (list tprime))))])
+    (flatten (f term))))
 
 (define (find-all-subterms term)
   (letrec ([f (λ (tprime)
