@@ -7,10 +7,12 @@
 (require "traat/termIR.rkt")
 (require "traat/matching.rkt")
 
-(provide synthesize-from-fixed-metasketches)
+(provide (all-defined-out))
 
-(struct fixed-metasketch (sigma-term func op-count arg-count))
-(struct fixed-sketch (metasketch op-list op-indexes nvar-indexes tvar-pos) #:transparent)
+(struct fixed-metasketch (sigma-term func op-count arg-count) #:transparent)
+;; op-indexes: for each operator slot, index into the list of operators that will fill it
+;; tvar and nvar indexes: lists of indexes into the argument list that are target or non-target
+(struct fixed-sketch (metasketch op-list op-indexes tvar-idxes) #:transparent)
 
 ;;;; 1 op pattern
 (define (1op-patt op arg1 arg2)
@@ -76,61 +78,93 @@
         3op-patt4-metasketch
         3op-patt5-metasketch))
 
-(define (insert-target-var nv-list tarvar target-idx)
+(define 1op-metasketches (list 1op-patt-metasketch))
+(define 2op-metasketches (list 2op-patt1-metasketch 2op-patt2-metasketch))
+(define 3op-metasketches (list 3op-patt1-metasketch
+                               3op-patt2-metasketch
+                               3op-patt3-metasketch
+                               3op-patt4-metasketch
+                               3op-patt5-metasketch))
+
+#;(define (insert-target-var nv-list tarvar target-idx)
   (append (take nv-list target-idx) (list tarvar) (drop nv-list target-idx)))
 
-(define (fixed-sketch-obeys-order? LHS fmetasketch tvar t-idx)
-  (varsolver-reduction-order? (make-rule LHS
-                                    (apply (apply curry (cons (fixed-metasketch-sigma-term fmetasketch) (map (λ (l) '+) (range (fixed-metasketch-op-count fmetasketch)))))
-                                           (insert-target-var (map (λ (i) (format "n~a" i))
-                                                                   (range (sub1 (fixed-metasketch-arg-count fmetasketch)))) tvar t-idx)))))
+(define (interleave-arguments tvars nvars tvar-idxes)
+  (let ([nvar-idxes (filter (λ (i) (not (member i tvar-idxes))) (range (+ (length tvars) (length nvars))))])
+    (map (λ (i) (if (member i tvar-idxes) (list-ref tvars (index-of tvar-idxes i))
+                    (list-ref nvars (index-of nvar-idxes i)))) (range (+ (length tvars) (length nvars))))))
 
-(define (eval-fixed-sketch fsketch tvar nvar-list)
-  (let* ([operators (map (λ (idx) (get-operator-function-by-idx (fixed-sketch-op-list fsketch) idx)) (fixed-sketch-op-indexes fsketch))]
-         [n-variables (map (λ (idx) (list-ref nvar-list idx)) (fixed-sketch-nvar-indexes fsketch))]
-         [arguments (insert-target-var n-variables tvar (fixed-sketch-tvar-pos fsketch))])
+(define (fixed-sketch-obeys-order? LHS fmetasketch tvar-idxes)
+  (let* ([LHS-variable-instances (termIR->variable-instances LHS)]
+         [tvars (filter is-tvar-matching? LHS-variable-instances)]
+         [nvars (filter (λ (v) (not (is-tvar-matching? v))) LHS-variable-instances)])
+  (varsolver-reduction-order? (make-rule LHS
+                                         (apply (fixed-metasketch-sigma-term fmetasketch)
+                                                (append (map (λ (l) '+) (range (fixed-metasketch-op-count fmetasketch)))
+                                                        (interleave-arguments tvars nvars tvar-idxes)))))))
+
+(define (sort-target-positions fmetasketch tvars nvars positions)
+  (let* ([get-dummy-term (λ (tvar-idxes)
+                          (apply (fixed-metasketch-sigma-term fmetasketch)
+                                 (append (map (λ (l) '+) (range (fixed-metasketch-op-count fmetasketch)))
+                                         (interleave-arguments tvars nvars tvar-idxes))))])
+    (sort positions (λ (p1 p2) (varsolver-reduction-order? (make-rule (get-dummy-term p2) (get-dummy-term p1)))))))
+
+(define (eval-fixed-sketch fsketch tvars nvars)
+  (let* ([fmetasketch (fixed-sketch-metasketch fsketch)]
+         [operators (map (λ (idx) (get-operator-function-by-idx (fixed-sketch-op-list fsketch) idx)) (fixed-sketch-op-indexes fsketch))]
+         [arguments (interleave-arguments tvars nvars (fixed-sketch-tvar-idxes fsketch))])
     (register-value (apply (fixed-metasketch-func (fixed-sketch-metasketch fsketch)) (append operators (map get-register arguments))))))
 
-(define (fixed-sketch->termIR fsketch tvar nvar-list)
-    (let* ([operators (map (λ (idx) (get-operator-symbol-by-idx (fixed-sketch-op-list fsketch) idx)) (fixed-sketch-op-indexes fsketch))]
-           [n-variables (map (λ (idx) (list-ref nvar-list idx)) (fixed-sketch-nvar-indexes fsketch))]
-           [arguments (insert-target-var n-variables tvar (fixed-sketch-tvar-pos fsketch))])
-      (apply (fixed-metasketch-sigma-term (fixed-sketch-metasketch fsketch)) (append operators arguments))))
+(define (fixed-sketch->termIR fsketch tvars nvars)
+  (let* ([fmetasketch (fixed-sketch-metasketch fsketch)]
+         [operators (map (λ (idx) (get-operator-symbol-by-idx (fixed-sketch-op-list fsketch) idx)) (fixed-sketch-op-indexes fsketch))]
+         [arguments (interleave-arguments tvars nvars (fixed-sketch-tvar-idxes fsketch))])
+    (apply (fixed-metasketch-sigma-term (fixed-sketch-metasketch fsketch)) (append operators arguments))))
+
+(define 2tvar-target-positions
+  (make-hash (list (cons 3 (list '(0 1) '(0 2) '(1 2)))
+                   (cons 4 (list '(0 1) '(0 2) '(0 3) '(1 2) '(1 3) '(2 3))))))
+
+(define 3tvar-target-positions
+  (list '(0 1 2) '(0 1 3) '(1 2 3)))
+
+(define (find-valid-tvar-positions LHS tvar-count fmetasketch)
+  (let* ([arg-count (fixed-metasketch-arg-count fmetasketch)]
+         [tvar-lists (if (equal? tvar-count 1)
+                         (map (λ (x) (list x)) (range (fixed-metasketch-arg-count fmetasketch)))
+                         (if (equal? tvar-count 2)
+                             (hash-ref 2tvar-target-positions arg-count)
+                             3tvar-target-positions))])
+    (filter (λ (tvar-idxes) (fixed-sketch-obeys-order? LHS fmetasketch tvar-idxes)) tvar-lists)))
 
 (define (synthesize-from-fixed-metasketch LHS fmetasketch)
-  (let* ([LHS-variables (termIR->variables LHS)]
-         [target-variables (filter is-tvar-matching? LHS-variables)]
-         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
-         [valid-target-positions (filter (λ (i) (fixed-sketch-obeys-order? LHS fmetasketch (car target-variables) i))
-                                         (range (fixed-metasketch-arg-count fmetasketch)))])
+  (let* ([LHS-variable-instances (termIR->variable-instances LHS)]
+         [LHS-tvar-positions (filter (λ (i) (is-tvar-matching? (list-ref LHS-variable-instances i))) (range (length LHS-variable-instances)))]
+         [target-variables (filter is-tvar-matching? LHS-variable-instances)]
+         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variable-instances)]
+         [valid-target-positions (sort-target-positions fmetasketch target-variables non-tvar-variables (find-valid-tvar-positions LHS (length target-variables) fmetasketch))])
     (letrec ([f (λ (positions)
                   (begin
                     (clear-vc!)
                     (if (empty? positions)
-                        (begin
-                          (displayln "No rule found for fixed sketch")
-                          'fail)
-                        (let* ([sym-tvar (get-sym-int)]
+                        (begin (displayln "No rule found for fixed sketch") 'fail)
+                        (let* ([sym-tvars (map (λ (e) (get-sym-int)) target-variables)]
                                [sym-nvars (map (λ (e) (get-sym-int)) non-tvar-variables)]
-                               [fsketch (fixed-sketch fmetasketch operator-list (map (λ (e) (get-sym-int)) (range (fixed-metasketch-op-count fmetasketch)))
-                                                      (map (λ (e) (get-sym-int))
-                                                           (range (sub1 (fixed-metasketch-arg-count fmetasketch)))) (car positions))]
-                               [evaled-LHS (apply (termIR->function LHS LHS-variables)
-                                                  (insert-target-var sym-nvars sym-tvar (index-of LHS-variables (car target-variables))))]
-                               [evaled-fixed-sketch  (eval-fixed-sketch fsketch sym-tvar sym-nvars)]
+                               [fsketch (fixed-sketch fmetasketch operator-list (map (λ (e) (get-sym-int)) (range (fixed-metasketch-op-count fmetasketch))) (car positions))]
+                               [evaled-LHS (apply (termIR->function LHS LHS-variable-instances) (interleave-arguments sym-tvars sym-nvars LHS-tvar-positions))]
+                               [evaled-fixed-sketch (eval-fixed-sketch fsketch sym-tvars sym-nvars)]
                                [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                             [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                              (synthesize #:forall (cons sym-tvar sym-nvars)
-                                                          #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS)))))])
+                                              (synthesize #:forall (append sym-tvars sym-nvars)
+                                                          #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS)))))]) 
                           (if (or (void? model) (unsat? model) (unknown? model))
                               (begin
                                 (displayln (format "Could not find solution for position ~a" (car positions)))
                                 (f (cdr positions)))
-                              (fixed-sketch->termIR (evaluate fsketch model) (car target-variables) non-tvar-variables))))))])
-      (if (not (equal? (length target-variables) 1))
-          (begin
-            (displayln "Fixed sketches not implemented for patterns with >1 target variables")
-            'fail)
+                              (fixed-sketch->termIR (evaluate fsketch model) target-variables non-tvar-variables))))))])
+      (if (> (length target-variables) 3)
+          (begin (displayln "Fixed sketches not implemented for patterns with >1 target variables") 'fail)
           (f valid-target-positions)))))
 
 (define (synthesize-from-fixed-metasketches LHS)
@@ -142,4 +176,16 @@
                       (if (equal? synthesis-output 'fail)
                           (f (cdr metasketches))
                           (make-rule LHS synthesis-output)))))])
-    (f all-fixed-metasketches)))
+    (let ([tvar-instance-count (length (filter is-tvar-matching? (termIR->variable-instances LHS)))])
+    (if (> tvar-instance-count 3)
+        (displayln "Fixed sketches not implemented for patterns with >3 target variables")
+        (f (filter (λ (m) (and (equal? (length (termIR->variable-instances LHS)) (fixed-metasketch-arg-count m))
+                               (< (length (filter is-tvar-matching? (termIR->variable-instances LHS)))
+                                  (fixed-metasketch-arg-count m)))) all-fixed-metasketches))))))
+
+
+;;;; broken rules synthesized
+;;  "(n0 - t1) -> (t1 - n0) [unknownorder]"
+;;  "((t0 - n1) + t2) -> (t0 - (t2 - n1)) [unknownorder]"
+;;  "((t0 * n1) - t2) -> ((t0 * t2) - n1) [unknownorder]"
+;;  "((t0 - n1) * t2) -> ((t0 - t2) * n1) [unknownorder]")

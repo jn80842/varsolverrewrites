@@ -4,7 +4,7 @@
 (provide (struct-out rule))
 (provide (struct-out eq-identity))
 (provide make-rule make-identity term-constant? term-variable? termIR->halide
-         termIR->variables termIR->in-solved-form? termIR->renamevars
+         termIR->variables termIR->variable-instances termIR->in-solved-form? termIR->renamevars
          rename-to-fresh-vars term-size term-op-count cap-and-sort-terms-by-size
          contains-target-variable? is-tvar-matching?
          is-non-tvar-matching? is-general-matching?
@@ -87,11 +87,14 @@
     (f '() l)))
 
 (define (termIR->variables t)
+  (remove-duplicates (termIR->variable-instances t)))
+
+(define (termIR->variable-instances t)
   (letrec ([f (λ (tprime)
                 (cond [(string? tprime) (list tprime)]
                       [(sigma-term? tprime) (map f (sigma-term-term-list tprime))]
                       [else '()]))])
-    (uniq (flatten (f t)))))
+    (flatten (f t))))
 
 (define (is-target-variable? v)
   (string-prefix? v "t"))

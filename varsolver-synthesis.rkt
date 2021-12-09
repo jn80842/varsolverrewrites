@@ -9,6 +9,8 @@
 (require "traat/matching.rkt")
 
 (provide verify-RHS-is-target-variable?
+         find-target-variable-RHS-rule
+         synthesize-fewer-target-variables-rule
          synthesize-nonly-rewrite
          synth-nonly-over-insn-count-range
          synthesize-topn-rewrite
@@ -31,7 +33,33 @@
 (define (insert-target-var nv-list tarvar target-idx)
   (append (take nv-list target-idx) (list tarvar) (drop nv-list target-idx)))
 
-
+;; only one synthesis attempt per insn size
+;; if we find a solution but it doesn't reduce target variable count, we just move on
+(define (synthesize-fewer-target-variables-rule LHS)
+  (let* ([LHS-op-count (term-op-count LHS)]
+         [LHS-variables (termIR->variables LHS)]
+         [sym-variables (map (λ (v) (get-sym-int)) LHS-variables)])
+    (letrec ([f (λ (insn-count)
+                  (if (>= insn-count LHS-op-count)
+                      'fail
+                      (begin
+                        (clear-vc!)
+                        (let* ([sk (get-symbolic-sketch operator-list (length LHS-variables) insn-count)]
+                               [evaled-sketch (apply (get-sketch-function sk) sym-variables)]
+                               [evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
+                               [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                            [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                              (synthesize #:forall sym-variables
+                                                          #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+                          (if (or (void? model)
+                                  (unsat? model)
+                                  (unknown? model))
+                              (f (add1 insn-count))
+                              (let ([candidate-rule (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) LHS-variables)))])
+                                (if (tvar-count-reduction-order? candidate-rule)
+                                    candidate-rule
+                                    (f (add1 insn-count)))))))))])
+      (f 0))))
 
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
@@ -123,6 +151,22 @@
                                          (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
                       [cex (verify (assert (equal? evaled-LHS tarvar)))])
                  (unsat? cex))))))
+
+(define (find-target-variable-RHS-rule LHS)
+  (let* ([LHS-variables (termIR->variables LHS)]
+         [variable-count (length LHS-variables)]
+         [sym-variables (map (λ (v) (get-sym-int)) LHS-variables)])
+    (letrec ([f (λ (idx)
+                  (cond [(>= idx variable-count) 'fail]
+                        [(not (is-tvar-matching? (list-ref LHS-variables idx))) (f (add1 idx))]
+                        [else (begin
+                                (clear-vc!)
+                                (let* ([evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
+                                       [cex (verify (assert (equal? evaled-LHS (list-ref sym-variables idx))))])
+                                  (if (unsat? cex)
+                                      (make-rule LHS (list-ref LHS-variables idx))
+                                      (f (add1 idx)))))]))])
+      (f 0))))
 
 ;; assume input pattern is normalized and not in solved form
 (define (find-rule patt tvar)
