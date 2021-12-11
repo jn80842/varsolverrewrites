@@ -61,6 +61,12 @@
                                     (f (add1 insn-count)))))))))])
       (f 0))))
 
+(define (order-symbolic-arguments term-vars sym-tvars sym-nvars)
+  (let ([tvar-idxes (filter (λ (i) (is-tvar-matching? (list-ref term-vars i))) (range (length term-vars)))]
+        [nvar-idxes (filter (λ (i) (not (is-tvar-matching? (list-ref term-vars i)))) (range (length term-vars)))])
+    (map (λ (i) (if (member i tvar-idxes) (list-ref sym-tvars (index-of tvar-idxes i))
+                    (list-ref sym-nvars (index-of nvar-idxes i)))) (range (length term-vars)))))
+
 ;; inputs: pattern, target variable idx
 ;; returns: rule or void
 (define (synthesize-topn-rewrite LHS insn-count)
@@ -70,26 +76,29 @@
          [target-variables (filter is-tvar-matching? LHS-variables)]
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
          [sk (get-symbolic-sketch operator-list (length non-tvar-variables) insn-count)])
-    (if (not (equal? (length target-variables) 1))
-        (void)
-        (begin
-          (clear-vc!)
-          (define-symbolic* tarvar integer?)
-          (define-symbolic* root-op integer?)
-          (let* ([non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
-                 [evaled-sketch (apply (get-topn-sketch-function sk root-op) tarvar non-tarvars)]
-                 [evaled-LHS (apply (termIR->function LHS LHS-variables)
-                                    (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
-                 [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
-                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                (synthesize #:forall (cons tarvar non-tarvars)
-                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
-            (unless (void? model)
-              (if (or (unsat? model) (unknown? model))
-                  (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
+    (letrec ([f (λ (tvars-pos)
+                  (if (empty? tvars-pos)
+                      (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
+                      (begin
+                        (clear-vc!)
+                        (define-symbolic* root-op integer?)
+                        (let* ([tarvars (for/list ([i (range (length target-variables))]) (get-sym-int))]
+                               [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-int))]
+                               [evaled-sketch (apply (get-topn-sketch-function sk root-op) (list-ref tarvars (car tvars-pos)) non-tarvars)]
+                               [evaled-LHS (apply (termIR->function LHS LHS-variables)
+                                                  (order-symbolic-arguments LHS-variables tarvars non-tarvars))]
+                               [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                            [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                              (synthesize #:forall (append tarvars non-tarvars)
+                                                          #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))])
+            (if (or (unsat? model) (unknown? model) (void? model))
+                  (begin
+                    (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
+                    (f (cdr tvars-pos)))
                   (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model)
                                                                            (evaluate root-op model)
-                                                                           (car target-variables) non-tvar-variables)))))))))))
+                                                                           (list-ref target-variables (car tvars-pos)) non-tvar-variables))))))))])
+      (f (range (length target-variables)))))))
 
 (define (synth-topn-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
