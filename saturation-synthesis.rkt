@@ -131,6 +131,7 @@
 ;; RHS moving target variables left or up
 ;; else return 'fail
 (define (synthesize-gradual-rule LHS)
+  (displayln "using gradual version")
   (let ([target-variable-RHS-output (find-target-variable-RHS-rule LHS)])
     (if (rule? target-variable-RHS-output)
         (begin
@@ -251,26 +252,34 @@
 
 ;;;; regression tests
 (define (regression benchmarks TRS1 TRS2)
-  (letrec ([f (λ (exprs solved1 solved2 better worse)
+  (letrec ([f (λ (exprs solved1 solved2 solved-by-either better worse)
             (if (empty? exprs)
-                (list solved1 solved2 better worse)
+                (list solved1 solved2 solved-by-either better worse)
                 (let* ([normed1 (varsolver-rewrite* "x" TRS1 (car exprs))]
                        [normed2 (varsolver-rewrite* "x" TRS2 (car exprs))]
                        [updated-solved1 (+ solved1
                                            (if (termIR->in-solved-form? normed1 "x") 1 0))]
                        [updated-solved2 (+ solved2
-                                           (if (termIR->in-solved-form? normed2 "x") 1 0))]
-                       [updated-better (+ better (if (terms->varsolver-reduction-order? "x" normed1 normed2) 1 0))]
+                                           (if (termIR->in-solved-form? normed2 "x")
+                                               1 0))]
+                       [updated-solved-by-either (+ solved-by-either
+                                                    (if (or (termIR->in-solved-form? normed1 "x") (termIR->in-solved-form? normed2 "x")) 1 0))]
+                       [updated-better (+ better (if (terms->varsolver-reduction-order? "x" normed1 normed2)
+                                                     (begin
+                                                      ; (displayln (format "BETTER ~a" (termIR->halide (car exprs))))
+                                                     1) 0))]
                        [updated-worse (+ worse (if (terms->varsolver-reduction-order? "x" normed2 normed1)
                                                    (begin
-                                                     (displayln (format "WORSE ~a" (termIR->halide (car exprs)))) 1) 0))])
-                  (f (cdr exprs) updated-solved1 updated-solved2 updated-better updated-worse))))])
-    (let ([output (f benchmarks 0 0 0 0)])
+                                                     ;(displayln (format "WORSE ~a" (termIR->halide (car exprs))))
+                                                     1) 0))])
+                  (f (cdr exprs) updated-solved1 updated-solved2 updated-solved-by-either updated-better updated-worse))))])
+    (let ([output (f benchmarks 0 0 0 0 0)])
       (begin
         (displayln (format "Prior TRS solved ~a benchmarks, current TRS solved ~a benchmarks of ~a"
                            (first output) (second output) (length benchmarks)))
+        (displayln (format "~a benchmarks were solved by at least one of the TRSs" (third output)))
         (displayln (format "Change to TRS moved ~a benchmarks in the right direction, ~a in the wrong direction"
-                           (third output) (fourth output)))))))
+                           (fourth output) (fifth output)))))))
 
 ;; assumes all rules have unique names
 (define (find-changed-rewrite-paths benchmarks TRS1 TRS2)

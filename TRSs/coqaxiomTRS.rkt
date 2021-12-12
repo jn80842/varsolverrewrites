@@ -3,7 +3,7 @@
 (require "../halide-parser.rkt")
 (require "../traat/termIR.rkt")
 
-(provide coqaxiomTRS)
+(provide coqaxiomTRS coqZDivEuclTRS)
 
 (define coqaxiomTRS-halide (list
                      (list "(((0 - n0) - t0) + n0)" "(0 - t0)" "coqAdd74")
