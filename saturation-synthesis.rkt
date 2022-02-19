@@ -258,10 +258,15 @@
                 (let* ([normed1 (varsolver-rewrite* "x" TRS1 (car exprs))]
                        [normed2 (varsolver-rewrite* "x" TRS2 (car exprs))]
                        [updated-solved1 (+ solved1
-                                           (if (termIR->in-solved-form? normed1 "x") 1 0))]
+                                           (if (termIR->in-solved-form? normed1 "x")
+                                               (begin
+                                              ;   (unless (termIR->in-solved-form? normed2 "x") (displayln (format "SOLVED BY PRIOR NOT BY CURRENT: ~a" (termIR->halide (car exprs)))))
+                                               1) 0))]
                        [updated-solved2 (+ solved2
                                            (if (termIR->in-solved-form? normed2 "x")
-                                               1 0))]
+                                               (begin
+                                              ;   (unless (termIR->in-solved-form? normed1 "x") (displayln (format "SOLVED BY CURRENT NOT BY PRIOR: ~a" (termIR->halide (car exprs)))))
+                                               1) 0))]
                        [updated-solved-by-either (+ solved-by-either
                                                     (if (or (termIR->in-solved-form? normed1 "x") (termIR->in-solved-form? normed2 "x")) 1 0))]
                        [updated-better (+ better (if (terms->varsolver-reduction-order? "x" normed1 normed2)
