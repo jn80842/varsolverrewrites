@@ -9,8 +9,8 @@
 
 (provide value-tokens op-tokens halide-lexer evaluate-halide-parser)
 
-(define-tokens value-tokens (NUM VAR TVAR NTVAR))
-(define-empty-tokens op-tokens (newline OP CP COMMA + - * / % ^ < > ! EQ NEQ GE LE EOF NEG OR AND MAX MIN SELECT TRUE FALSE LII UINT1 UINT0 UINT LIKELY))
+(define-tokens value-tokens (NUM VAR TVAR NTVAR XBROADCAST))
+(define-empty-tokens op-tokens (newline OP CP COMMA + - * / % ^ < > ! EQ NEQ GE LE EOF NEG OR AND MAX MIN SELECT TRUE FALSE LII UINT1 UINT0 UINT LIKELY PROMISE LET IN ASMT RAMP))
 
 (define-lex-abbrevs
  (lower-letter (:/ "a" "z"))
@@ -51,7 +51,13 @@
    ["false" 'FALSE]
    ["likely_if_innermost" 'LII]
    ["likely" 'LIKELY]
+   ["promise_clamped" 'PROMISE]
+   ["let" 'LET]
+   ["=" 'ASMT]
+   ["in" 'IN]
+   ["ramp" 'RAMP]
    ;[(:+ (:or lower-letter upper-letter)) (token-VAR (string->symbol lexeme))]
+   [(:: "x" (:+ digit)) (token-XBROADCAST lexeme)]
    [(union "x" "y" "z" "w" "u" "v") (token-VAR (string->symbol lexeme))]
    [(:: "t" (:+ digit)) (token-TVAR (string->symbol lexeme))]
    [(:: "n" (:+ digit)) (token-NTVAR (string->symbol lexeme))]

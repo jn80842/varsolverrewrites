@@ -13,7 +13,7 @@
          can-match-tvar? can-match-non-tvar? can-match-var-to-term?
          termIR->rule-in-solved-form? termIR->replace-constant-variables
          equal-mod-alpha-renaming? member-mod-alpha-renaming? contains-operator?
-         termIR->typechecks?)
+         termIR->typechecks? termIR->subst-lets)
 
 ;; terms are vname/variables, integers, or sigma-terms
 ;; let's make variables strings for now
@@ -257,3 +257,13 @@
                             (term-variable? (first (sigma-term-term-list t)))) #f]
                       [else (andmap f (sigma-term-term-list t))]))])
     (f term)))
+
+(define (termIR->subst-lets term)
+  (letrec ([f (λ (varhash t)
+                (cond [(and (term-variable? t) (hash-has-key? varhash t)) (f varhash (hash-ref varhash t))]
+                      [(and (sigma-term? t) (eq? (sigma-term-symbol t) 'let)) (f (make-immutable-hash (append (hash->list varhash) (list (cons (first (sigma-term-term-list t))
+                                                                                                                                               (second (sigma-term-term-list t))))))
+                                                                                 (third (sigma-term-term-list t)))]
+                      [(sigma-term? t) (sigma-term (sigma-term-symbol t) (map (λ (child) (f varhash child)) (sigma-term-term-list t)))]
+                      [else t]))])
+    (f (make-immutable-hash '()) term)))

@@ -43,11 +43,14 @@
          [(VAR) (symbol->string $1)]
          [(TVAR) (symbol->string $1)]
          [(NTVAR) (symbol->string $1)]
+         [(XBROADCAST OP exp CP) (sigma-term 'broadcast (list $3 (string->number (substring $1 1))))]
+         [(RAMP OP exp COMMA exp COMMA exp CP) (sigma-term 'ramp (list $3 $5 $7))]
          [(boolvar) (symbol->string $1)]
          [(TRUE) 'true] ;; need to add a boolean type
          [(FALSE) 'false]
          [(UINT1) 'true]
          [(UINT0) 'false]
+         [(UINT exp) $2] ;; this info could be useful for typing, for now throwing it away
          [(exp EQ exp) (sigma-term '== (list $1 $3))]
          [(exp NEQ exp) (sigma-term '!= (list $1 $3))]
          [(MAX OP exp COMMA exp CP) (sigma-term 'max (list $3 $5))]
@@ -65,9 +68,12 @@
          [(exp GE exp) (sigma-term '>= (list $1 $3))]
          [(exp LE exp) (sigma-term '<= (list $1 $3))]
          [(! OP exp CP) (sigma-term '! (list $3))]
+         [(! exp) (sigma-term '! (list $2))]
          [(OP exp CP) $2]
          [(LII exp) $2]
-         [(LIKELY OP exp CP) $3]))))
+         [(LIKELY OP exp CP) $3]
+         [(PROMISE OP exp COMMA exp COMMA exp CP) $3]
+         [(LET VAR ASMT exp IN exp) (sigma-term 'let (list (symbol->string $2) $4 $6))]))))
 
 (define halide->solvedform-parser
   (parser
