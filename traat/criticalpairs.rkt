@@ -69,7 +69,7 @@
 (define (top-level-critical-pairs ruleset)
   (flatten (map (λ (r) (top-level-CPs ruleset r)) ruleset)))
 
-(define (get-cp-divergent-terms cp TRS)
+(define (get-cp-divergent-terms cp)
   (let ([x (cdr (rename-to-tarvar-aware-vars (lift-pairs (critical-pair-subst cp) (rule-lhs (critical-pair-rule1 cp)))
                                               (make-hash '())
                                               (list "ta" "na" "va")))])
@@ -82,18 +82,60 @@
     (eq-identity (car renamed-terms) (cdr renamed-terms) name)))
 
 (define (joinable? cp TRS)
-  (let* ([p (get-cp-divergent-terms cp TRS)]
+  (let* ([p (get-cp-divergent-terms cp)]
          [y1 (car p)]
          [y2 (cdr p)])
     (equal? (varsolver-rules-rewrite* TRS y1) (varsolver-rules-rewrite* TRS y2))))
 
 (define (solved-joinable? cp TRS)
-    (let* ([p (get-cp-divergent-terms cp TRS)]
+    (let* ([p (get-cp-divergent-terms cp)]
          [y1 (varsolver-rules-rewrite* TRS (car p))]
          [y2 (varsolver-rules-rewrite* TRS (cdr p))])
     (or (and (termIR->rule-in-solved-form? y1) (termIR->rule-in-solved-form? y2))
      (equal? y1 y2))))
 
+(define (updated-ruleset ruleset Rnew)
+  (append
+   (for/list ([r (filter (λ (r) (equal? (rule-lhs r)
+                                        (varsolver-rules-rewrite* (list Rnew) (rule-lhs r)))) ruleset)])
+     (let ([new-rhs (varsolver-rules-rewrite* (append ruleset (list Rnew)) (rule-rhs r))])
+       (unless (equal? new-rhs (rule-rhs r))
+         (displayln (format "~a RHS has been rewritten" (rule-name r))))
+       (rule (rule-lhs r) new-rhs (rule-name r))))
+   (list Rnew)))
+
+(define (updated-identities ruleset Rnew)
+  (for/list ([r (filter (λ (r) (not (equal? (rule-lhs r)
+                                            (varsolver-rules-rewrite* (list Rnew) (rule-lhs r))))) ruleset)])
+    (let ([new-lhs (varsolver-rules-rewrite* (append ruleset (list Rnew)) (rule-lhs r))])
+      (unless (equal? (rule-lhs r) new-lhs)
+        (displayln (format "~a LHS has been rewritten" (rule-name r))))
+      (rule new-lhs (rule-rhs r) (rule-name r)))))
+
+(define (nonjoinable-CPs ruleset newrule)
+  (filter (λ (cp) (and (not (joinable? cp ruleset))
+                       (not (solved-joinable? cp ruleset)))) (CPs ruleset newrule)))
+
+(define (find-rule-from-cp cp TRS order? rname)
+  (let* ([p (get-cp-divergent-terms cp)]
+         [side1 (varsolver-rules-rewrite* TRS (car p))]
+         [side2 (varsolver-rules-rewrite* TRS (cdr p))]
+         [rorient1 (rule side1 side2 rname)]
+         [rorient2 (rule side2 side1 rname)])
+    (cond [(order? rorient1) rorient1]
+          [(order? rorient2) rorient2]
+          [else (begin
+                  (displayln (format "Could not orient ~a AND ~a" side1 side2))
+                  'FAIL)])))
+
+(define (print-cp-divergent-terms cp)
+  (let ([p (get-cp-divergent-terms cp)])
+    (displayln (format "~a AND ~a" (termIR->halide (car p)) (termIR->halide (cdr p))))))
+
+(define (print-normalized-divergent-terms cp ruleset)
+  (let ([p (get-cp-divergent-terms cp)])
+    (displayln (format "~a AND ~a" (termIR->halide (varsolver-rules-rewrite* ruleset (car p)))
+                       (termIR->halide (varsolver-rules-rewrite* ruleset (cdr p)))))))
 
 (define exampleTRS-halide (list
                     (list "(n0 + t0)" "(t0 + n0)" "coqAdd1")
@@ -114,6 +156,5 @@
   (list (rule (halide->termIR "(t0 - (t1 - n0)) - t2")
               (halide->termIR "((t0 - t1) - t2) + n0")
               "completionrule1")))
-
 
 
