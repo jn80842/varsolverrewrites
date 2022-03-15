@@ -6,6 +6,7 @@
 (provide (struct-out sketch)
          (struct-out insn))
 (provide get-sym-int
+         get-sym-input-int
          get-register
          get-symbolic-sketch
          get-sketch-function
@@ -13,28 +14,6 @@
          termIR->function
          termIR->typecheck?
          termIR->contains-div-mod?)
-
-(define (get-sym-int)
-  (define-symbolic* x integer?)
-  x)
-
-(define (get-sym-int-register)
-  (register 'int (get-sym-int)))
-
-(define (get-sym-bool)
-  (define-symbolic* b boolean?)
-  b)
-
-(define (get-sym-bool-register)
-  (register 'bool (get-sym-bool)))
-
-(define (get-register val)
-  (let ([reg-type (if (integer? val)
-                      'int
-                      (if (boolean? val)
-                          'bool
-                          'error))])
-    (register reg-type val)))
 
 (struct insn (op-idx arg1-idx arg2-idx arg3-idx) #:transparent)
 

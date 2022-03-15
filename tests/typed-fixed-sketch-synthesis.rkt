@@ -26,7 +26,7 @@
                                     (list "t0") (list "n0" "n1"))
               (sigma-term '+ (list "n0" (sigma-term '* (list "t0" "n1")))))
 
-(check-equal? (eval-fixed-sketch (fixed-sketch 2op-patt1-metasketch
+#;(check-equal? (eval-fixed-sketch (fixed-sketch 2op-patt1-metasketch
                                                operator-list
                                                '(0 2) '(1))
                                  (list 10) (list 3 2))
@@ -34,3 +34,11 @@
 
 (check-equal? (sort-target-positions 3op-patt1-metasketch '("t0" "t1") '("n0" "n1") (list '(2 3) '(0 3) '(1 2) '(0 2)))
               (list '(0 2) '(0 3) '(1 2) '(2 3)))
+
+(check-equal? (synthesize-from-fixed-metasketch (sigma-term '- (list (sigma-term '+ (list "n0" "n1")) "t0"))
+                                                2op-patt1-metasketch)
+              (sigma-term '- (list "n0" (sigma-term '- (list "t0" "n1")))))
+
+(check-equal? (synthesize-from-fixed-metasketch (sigma-term '+ (list (sigma-term '- (list "n0" (sigma-term '- (list "t1" "n2")))) "t3"))
+                                                3op-patt1-metasketch)
+              (sigma-term '+ (list (sigma-term '- (list "n0" "t1")) (sigma-term '+ (list "t3" "n2")))))

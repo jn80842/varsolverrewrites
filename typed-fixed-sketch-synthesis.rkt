@@ -9,7 +9,12 @@
 
 (provide (all-defined-out))
 
-(struct fixed-metasketch (sigma-term func op-count arg-count) #:transparent)
+(define CURRENT-WIDTH 16)
+
+(define (overflow-bounds width maxdepth)
+  (floor (expt (expt 2 (sub1 width)) (/ 1 (expt 2 maxdepth)))))
+
+(struct fixed-metasketch (sigma-term func op-count arg-count max-depth) #:transparent)
 ;; op-indexes: for each operator slot, index into the list of operators that will fill it
 ;; tvar and nvar indexes: lists of indexes into the argument list that are target or non-target
 (struct fixed-sketch (metasketch op-list op-indexes tvar-idxes) #:transparent)
@@ -20,7 +25,7 @@
 (define (1op-patt-func op arg1 arg2)
   (op arg1 arg2))
 
-(define 1op-patt-metasketch (fixed-metasketch 1op-patt 1op-patt-func 1 2))
+(define 1op-patt-metasketch (fixed-metasketch 1op-patt 1op-patt-func 1 2 1))
 
 ;;;; 2 op patterns
 (define (2op-patt1 op1 op2 arg1 arg2 arg3)
@@ -28,45 +33,45 @@
 (define (2op-patt1-func op1 op2 arg1 arg2 arg3)
   (op1 arg1 (op2 arg2 arg3)))
 
-(define 2op-patt1-metasketch (fixed-metasketch 2op-patt1 2op-patt1-func 2 3))
+(define 2op-patt1-metasketch (fixed-metasketch 2op-patt1 2op-patt1-func 2 3 2))
 
 (define (2op-patt2 op1 op2 arg1 arg2 arg3)
   (sigma-term op1 (list (sigma-term op2 (list arg1 arg2)) arg3)))
 (define (2op-patt2-func op1 op2 arg1 arg2 arg3)
   (op1 (op2 arg1 arg2) arg3))
 
-(define 2op-patt2-metasketch (fixed-metasketch 2op-patt2 2op-patt2-func 2 3))
+(define 2op-patt2-metasketch (fixed-metasketch 2op-patt2 2op-patt2-func 2 3 2))
 
 ;;;; 3 op patterns
 (define (3op-patt1 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list arg1 arg2)) (sigma-term op3 (list arg3 arg4)))))
 (define (3op-patt1-func op1 op2 op3 arg1 arg2 arg3 arg4)
   (op1 (op2 arg1 arg2) (op3 arg3 arg4)))
-(define 3op-patt1-metasketch (fixed-metasketch 3op-patt1 3op-patt1-func 3 4))
+(define 3op-patt1-metasketch (fixed-metasketch 3op-patt1 3op-patt1-func 3 4 2))
 
 (define (3op-patt2 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list arg1 (sigma-term op2 (list arg2 (sigma-term op3 (list arg3 arg4)))))))
 (define (3op-patt2-func op1 op2 op3 arg1 arg2 arg3 arg4)
   (op1 arg1 (op2 arg2 (op3 arg3 arg4))))
-(define 3op-patt2-metasketch (fixed-metasketch 3op-patt2 3op-patt2-func 3 4))
+(define 3op-patt2-metasketch (fixed-metasketch 3op-patt2 3op-patt2-func 3 4 3))
 
 (define (3op-patt3 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list arg1 (sigma-term op2 (list (sigma-term op3 (list arg2 arg3)) arg4)))))
 (define (3op-patt3-func op1 op2 op3 arg1 arg2 arg3 arg4)
   (op1 arg1 (op2 (op3 arg2 arg3) arg4)))
-(define 3op-patt3-metasketch (fixed-metasketch 3op-patt3 3op-patt3-func 3 4))
+(define 3op-patt3-metasketch (fixed-metasketch 3op-patt3 3op-patt3-func 3 4 3))
 
 (define (3op-patt4 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list arg1 (sigma-term op3 (list arg2 arg3)))) arg4)))
 (define (3op-patt4-func op1 op2 op3 arg1 arg2 arg3 arg4)
   (op1 (op2 arg1 (op3 arg2 arg3)) arg4))
-(define 3op-patt4-metasketch (fixed-metasketch 3op-patt4 3op-patt4-func 3 4))
+(define 3op-patt4-metasketch (fixed-metasketch 3op-patt4 3op-patt4-func 3 4 3))
 
 (define (3op-patt5 op1 op2 op3 arg1 arg2 arg3 arg4)
   (sigma-term op1 (list (sigma-term op2 (list (sigma-term op3 (list arg1 arg2)) arg3)) arg4)))
 (define (3op-patt5-func op1 op2 op3 arg1 arg2 arg3 arg4)
   (op1 (op2 (op3 arg1 arg2) arg3) arg4))
-(define 3op-patt5-metasketch (fixed-metasketch 3op-patt5 3op-patt5-func 3 4))
+(define 3op-patt5-metasketch (fixed-metasketch 3op-patt5 3op-patt5-func 3 4 3))
 
 (define all-fixed-metasketches
   (list 1op-patt-metasketch
@@ -143,21 +148,26 @@
          [LHS-tvar-positions (filter (λ (i) (is-tvar-matching? (list-ref LHS-variable-instances i))) (range (length LHS-variable-instances)))]
          [target-variables (filter is-tvar-matching? LHS-variable-instances)]
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variable-instances)]
-         [valid-target-positions (sort-target-positions fmetasketch target-variables non-tvar-variables (find-valid-tvar-positions LHS (length target-variables) fmetasketch))])
+         [valid-target-positions (sort-target-positions fmetasketch target-variables non-tvar-variables (find-valid-tvar-positions LHS (length target-variables) fmetasketch))]
+         [bound (overflow-bounds CURRENT-WIDTH (fixed-metasketch-max-depth fmetasketch))])
     (letrec ([f (λ (positions)
                   (begin
                     (clear-vc!)
                     (if (empty? positions)
                         (begin (displayln "No rule found for fixed sketch") 'fail)
-                        (let* ([sym-tvars (map (λ (e) (get-sym-int)) target-variables)]
-                               [sym-nvars (map (λ (e) (get-sym-int)) non-tvar-variables)]
+                        (let* ([sym-tvars (map (λ (e) (get-sym-input-int)) target-variables)]
+                               [sym-nvars (map (λ (e) (get-sym-input-int)) non-tvar-variables)]
                                [fsketch (fixed-sketch fmetasketch operator-list (map (λ (e) (get-sym-int)) (range (fixed-metasketch-op-count fmetasketch))) (car positions))]
                                [evaled-LHS (apply (termIR->function LHS LHS-variable-instances) (interleave-arguments sym-tvars sym-nvars LHS-tvar-positions))]
                                [evaled-fixed-sketch (eval-fixed-sketch fsketch sym-tvars sym-nvars)]
-                               [model (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
-                                                            [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                              (synthesize #:forall (append sym-tvars sym-nvars)
-                                                          #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS)))))]) 
+                               [model (begin
+                                        (for ([v (append sym-tvars sym-nvars)])
+                                          (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                          (assume (bvsge v (bv (- bound) CURRENT-WIDTH))))
+                                        (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                                (synthesize #:forall (append sym-tvars sym-nvars)
+                                                            #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS))))))]) 
                           (if (or (void? model) (unsat? model) (unknown? model))
                               (begin
                                 (displayln (format "Could not find solution for position ~a" (car positions)))

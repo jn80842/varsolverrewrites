@@ -67,43 +67,43 @@
       (register 'int (f (register-value r1) (register-value r2)))
       error-register))
 
-(define (hld-bv-add i1 i2 [i3 0])
+(define (hld-add i1 i2 [i3 0])
   (int-int-int-func bvadd i1 i2))
 
 (define (hld-add->string i1 i2 [i3 ""])
   (format "(~a + ~a)" i1 i2))
 
-(define (hld-bv-sub i1 i2 [i3 0])
+(define (hld-sub i1 i2 [i3 0])
   (int-int-int-func bvsub i1 i2))
 
 (define (hld-sub->string i1 i2 [i3 ""])
   (format "(~a - ~a)" i1 i2))
 
-(define (hld-bv-mul i1 i2 [i3 0])
+(define (hld-mul i1 i2 [i3 0])
   (int-int-int-func bvmul i1 i2))
 
 (define (hld-mul->string i1 i2 [i3 ""])
   (format "(~a * ~a)" i1 i2))
 
-(define (hld-bv-min i1 i2 [i3 0])
+(define (hld-min i1 i2 [i3 0])
   (int-int-int-func bvsmin i1 i2))
 
 (define (hld-min->string i1 i2 [i3 ""])
   (format "min(~a, ~a)" i1 i2))
 
-(define (hld-bv-max i1 i2 [i3 0])
+(define (hld-max i1 i2 [i3 0])
   (int-int-int-func bvsmax i1 i2))
 
 (define (hld-max->string i1 i2 [i3 ""])
   (format "max(~a, ~a)" i1 i2))
 
-(define (hld-bv-div i1 i2 [i3 0])
+(define (hld-div i1 i2 [i3 0])
   (int-int-int-func bv-euclidean-div i1 i2))
 
 (define (hld-div->string i1 i2 [i3 ""])
   (format "(~a / ~a)" i1 i2))
 
-(define (hld-bv-mod i1 i2 [i3 0])
+(define (hld-mod i1 i2 [i3 0])
   (int-int-int-func bv-euclidean-mod i1 i2))
 
 (define (hld-mod->string i1 i2 [i3 ""])
@@ -115,44 +115,44 @@
       (register 'bool (f (register-value r1) (register-value r2)))
       error-register))
 
-(define (hld-bv-lt i1 i2 [i3 0])
+(define (hld-lt i1 i2 [i3 0])
   (int-int-bool-func bvslt i1 i2))
 
 (define (hld-lt->string i1 i2 [i3 ""])
   (format "(~a < ~a)" i1 i2))
 
-(define (hld-bv-le i1 i2 [i3 0])
+(define (hld-le i1 i2 [i3 0])
   (int-int-bool-func bvsle i1 i2))
 
 (define (hld-le->string i1 i2 [i3 ""])
   (format "(~a <= ~a)" i1 i2))
 
-(define (hld-bv-gt i1 i2 [i3 0])
+(define (hld-gt i1 i2 [i3 0])
   (int-int-bool-func bvsgt i1 i2))
 
 (define (hld-gt->string i1 i2 [i3 ""])
   (format "(~a > ~a)" i1 i2))
 
-(define (hld-bv-ge i1 i2 [i3 0])
+(define (hld-ge i1 i2 [i3 0])
   (int-int-bool-func bvsge i1 i2))
 
 (define (hld-ge->string i1 i2 [i3 0])
   (format "(~a >= ~a)" i1 i2))
 
-(define (hld-bv-eqi i1 i2 [i3 0])
+(define (hld-eqi i1 i2 [i3 0])
   (int-int-bool-func bveq i1 i2))
 
 (define (hld-eq->string i1 i2 [i3 ""])
   (format "(~a == ~a)" i1 i2))
 
-(define (hld-bv-neqi i1 i2 [i3 0])
+(define (hld-neqi i1 i2 [i3 0])
   (int-int-bool-func (λ (x y) (bvnot (bveq x y))) i1 i2))
 
 (define (hld-neq->string i1 i2 [i3 ""])
   (format "(~a != ~a)" i1 i2))
 
 ;; bool -> int -> int -> int
-(define (hld-bv-seli i1 i2 i3)
+(define (hld-seli i1 i2 i3)
   (if (and (bool-register? i1) (and (int-register? i2) (int-register? i3)))
       (register 'int (if (register-value i1) (register-value i2) (register-value i3)))
       error-register))
@@ -161,7 +161,7 @@
   (format "select(~a, ~a, ~a)" i1 i2 i3))
 
 ;; bool -> bool -> bool -> bool
-(define (hld-bv-selb i1 i2 i3)
+(define (hld-selb i1 i2 i3)
   (if (and (bool-register? i1) (and (bool-register? i2) (bool-register? i3)))
       (register 'bool (register-value i1) (register-value i2) (register-value i3))
       error-register))
@@ -172,27 +172,27 @@
       (register 'bool (f (register-value r1) (register-value r2)))
       error-register))
 
-(define (hld-bv-and i1 i2 [i3 #f])
+(define (hld-and i1 i2 [i3 #f])
   (bool-bool-bool-func bvand i1 i2))
 
 (define (hld-and->string i1 i2 [i3 ""])
   (format "(~a && ~a)" i1 i2))
 
-(define (hld-bv-or i1 i2 [i3 #f])
+(define (hld-or i1 i2 [i3 #f])
   (bool-bool-bool-func bvor i1 i2))
 
 (define (hld-or->string i1 i2 [i3 #f])
   (format "(~a || ~a)" i1 i2))
 
-(define (hld-bv-eqb i1 i2 [i3 #f])
+(define (hld-eqb i1 i2 [i3 #f])
   (bool-bool-bool-func bveq i1 i2))
 
-(define (hld-bv-neqb i1 i2 [i3 #f])
+(define (hld-neqb i1 i2 [i3 #f])
    (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2))
 
 ;; bool -> bool
 ;; only one of these
-(define (hld-bv-not i1 [i2 #f] [i3 #f])
+(define (hld-not i1 [i2 #f] [i3 #f])
   (if (bool-register? i1)
       (register 'bool (bvnot (register-value i1)))
       error-register))
@@ -202,26 +202,26 @@
 
 (struct operator (function arity name string-function op-symbol) #:transparent)
 
-(define add-operator (operator hld-bv-add 2 "hld-add" hld-add->string '+))
-(define sub-operator (operator hld-bv-sub 2 "hld-sub" hld-sub->string '-))
-(define mod-operator (operator hld-bv-mod 2 "hld-mod" hld-mod->string '%))
-(define mul-operator (operator hld-bv-mul 2 "hld-mul" hld-mul->string '*))
-(define div-operator (operator hld-bv-div 2 "hld-div" hld-div->string '/))
-(define min-operator (operator hld-bv-min 2 "hld-min" hld-min->string 'min))
-(define max-operator (operator hld-bv-max 2 "hld-max" hld-max->string 'max))
-(define eqi-operator (operator hld-bv-eqi 2 "hld-eqi" hld-eq->string '==))
-(define neqi-operator (operator hld-bv-neqi 2 "hld-neqi" hld-neq->string '!=))
-(define eqb-operator (operator hld-bv-eqb 2 "hld-eqb" hld-eq->string '==))
-(define neqb-operator (operator hld-bv-neqb 2 "hld-neqb" hld-neq->string '!=))
-(define lt-operator (operator hld-bv-lt 2 "hld-lt" hld-lt->string '<))
-(define le-operator (operator hld-bv-le 2 "hld-le" hld-le->string '<=))
-(define gt-operator (operator hld-bv-gt 2 "hld-gt" hld-gt->string '>))
-(define ge-operator (operator hld-bv-ge 2 "hld-ge" hld-ge->string '>=))
-(define and-operator (operator hld-bv-and 2 "hld-and" hld-and->string '&&))
-(define or-operator (operator hld-bv-or 2 "hld-or" hld-or->string 'or))
-(define not-operator (operator hld-bv-not 1 "hld-not" hld-not->string '!))
-(define seli-operator (operator hld-bv-seli 3 "hld-seli" hld-sel->string 'select))
-(define selb-operator (operator hld-bv-selb 3 "hld-selb" hld-sel->string 'select))
+(define add-operator (operator hld-add 2 "hld-add" hld-add->string '+))
+(define sub-operator (operator hld-sub 2 "hld-sub" hld-sub->string '-))
+(define mod-operator (operator hld-mod 2 "hld-mod" hld-mod->string '%))
+(define mul-operator (operator hld-mul 2 "hld-mul" hld-mul->string '*))
+(define div-operator (operator hld-div 2 "hld-div" hld-div->string '/))
+(define min-operator (operator hld-min 2 "hld-min" hld-min->string 'min))
+(define max-operator (operator hld-max 2 "hld-max" hld-max->string 'max))
+(define eqi-operator (operator hld-eqi 2 "hld-eqi" hld-eq->string '==))
+(define neqi-operator (operator hld-neqi 2 "hld-neqi" hld-neq->string '!=))
+(define eqb-operator (operator hld-eqb 2 "hld-eqb" hld-eq->string '==))
+(define neqb-operator (operator hld-neqb 2 "hld-neqb" hld-neq->string '!=))
+(define lt-operator (operator hld-lt 2 "hld-lt" hld-lt->string '<))
+(define le-operator (operator hld-le 2 "hld-le" hld-le->string '<=))
+(define gt-operator (operator hld-gt 2 "hld-gt" hld-gt->string '>))
+(define ge-operator (operator hld-ge 2 "hld-ge" hld-ge->string '>=))
+(define and-operator (operator hld-and 2 "hld-and" hld-and->string '&&))
+(define or-operator (operator hld-or 2 "hld-or" hld-or->string 'or))
+(define not-operator (operator hld-not 1 "hld-not" hld-not->string '!))
+(define seli-operator (operator hld-seli 3 "hld-seli" hld-sel->string 'select))
+(define selb-operator (operator hld-selb 3 "hld-selb" hld-sel->string 'select))
 
 (define operator-list
   (list add-operator ;; 0

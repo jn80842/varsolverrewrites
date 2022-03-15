@@ -2,6 +2,16 @@
 
 (provide (all-defined-out))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                       ;;
+;;  SET FLAG FOR INT/BITVECTOR HERE      ;;
+;;                                       ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define USEINT #f)
+(define width 16)
+
 ;; all operators take registers as inputs
 ;; type can be 'int 'bool or 'error
 ;; value can be a variable, a constant, or another register expression
@@ -16,6 +26,49 @@
 
 (define error-register (register 'error 'error))
 
+(define (get-sym-int)
+  (define-symbolic* x integer?)
+  x)
+
+;; (define get-sym-input-int get-sym-int)
+(define (get-sym-input-int)
+  (if USEINT
+      (get-sym-int)
+      (begin
+        (define-symbolic* x (bitvector width))
+        x)))
+
+(define (get-sym-int-register)
+  (register 'int (get-sym-input-int)))
+
+(define (get-sym-bool)
+  (define-symbolic* b boolean?)
+  b)
+
+(define (get-sym-bool-register)
+  (register 'bool (get-sym-bool)))
+
+(define (get-sym-bv)
+  (define-symbolic* bv (bitvector width))
+  bv)
+
+;; note: we never mix integers and bitvectors
+(define (get-sym-bv-register)
+  (register 'int (get-sym-bv width)))
+
+(define (get-register val)
+  (let ([reg-type (if (or (integer? val) (bv? val))
+                      'int
+                      (if (boolean? val)
+                          'bool
+                          'error))])
+    (register reg-type val)))
+
+(define (bvpositive? x)
+  (bvslt (bvsub x x) x))
+(define (bvnegative? x)
+  (bvslt x (bvsub x x)))
+
 (define (div-in-Z-val x y)
   (if (= (modulo x y) 0) 0 1))
 
@@ -25,12 +78,31 @@
         [(and (negative? x) (not (eq? y 0))) (- (- (quotient (abs x) y)) (div-in-Z-val x y))]
         [else (quotient x y)]))
 
+(define (bv-euclidean-div x y)
+  (cond [(bvzero? x) x]
+        [(bvzero? y) y]
+        [(and (bvpositive? x) (bvpositive? y)) (bvsdiv x y)]
+        [(and (bvpositive? x) (bvnegative? y)) (bvneg (bvsdiv x (bvneg y)))]
+        [(and (bvnegative? x) (bvpositive? y) (bvzero? (bvsmod x y))) (bvneg (bvsdiv (bvneg x) y))]
+        [(and (bvnegative? x) (bvpositive? y) (not (bvzero? (bvsmod x y)))) (bvsub1 (bvneg (bvsdiv (bvneg x) y)))]
+        [(and (bvnegative? x) (bvnegative? y) (bvzero? (bvsmod x y))) (bvsdiv (bvneg x) (bvneg y))]
+        [(and (bvnegative? x) (bvnegative? y) (not (bvzero? (bvsmod x y)))) (bvadd1 (bvsdiv (bvneg x) (bvneg y)))]))
+
 (define (euclidean-mod x y)
   (cond [(eq? y 0) 0]
         [(and (negative? x) (negative? y)) (- (- (modulo (abs x) (abs y))) (* y (div-in-Z-val x y)))]
         [(and (not (eq? y 0)) (negative? x)) (+ (- (modulo (abs x) y)) (* y (div-in-Z-val x y)))]
         [(negative? y) (modulo x (abs y))]
         [else (modulo x y)]))
+
+(define (bv-euclidean-mod x y)
+  (cond [(bvzero? x) x]
+        [(bvzero? y) y]
+        [(bvzero? (bvsmod x y)) (bvsmod x y)]
+        [(and (bvpositive? x) (bvpositive? y)) (bvsmod x y)]
+        [(and (bvpositive? x) (bvnegative? y)) (bvsmod x (bvneg y))]
+        [(and (bvnegative? x) (bvpositive? y) (not (bvzero? (bvsmod x y)))) (bvsub y (bvsmod (bvneg x) y))]
+        [(and (bvnegative? x) (bvnegative? y) (not (bvzero? (bvsmod x y)))) (bvsub (bvneg y) (bvsmod (bvneg x) (bvneg y)))]))
 
 ;; int -> int -> int
 (define (int-int-int-func f r1 r2)
@@ -39,31 +111,41 @@
       error-register))
 
 (define (hld-add i1 i2 [i3 0])
-  (int-int-int-func + i1 i2))
+  (if USEINT
+      (int-int-int-func + i1 i2)
+      (int-int-int-func bvadd i1 i2)))
 
 (define (hld-add->string i1 i2 [i3 ""])
   (format "(~a + ~a)" i1 i2))
 
 (define (hld-sub i1 i2 [i3 0])
-  (int-int-int-func - i1 i2))
+  (if USEINT
+      (int-int-int-func - i1 i2)
+      (int-int-int-func bvsub i1 i2)))
 
 (define (hld-sub->string i1 i2 [i3 ""])
   (format "(~a - ~a)" i1 i2))
 
 (define (hld-mul i1 i2 [i3 0])
-  (int-int-int-func * i1 i2))
+  (if USEINT
+      (int-int-int-func * i1 i2)
+      (int-int-int-func bvmul i1 i2)))
 
 (define (hld-mul->string i1 i2 [i3 ""])
   (format "(~a * ~a)" i1 i2))
 
 (define (hld-min i1 i2 [i3 0])
-  (int-int-int-func min i1 i2))
+  (if USEINT
+      (int-int-int-func min i1 i2)
+      (int-int-int-func bvsmin i1 i2)))
 
 (define (hld-min->string i1 i2 [i3 ""])
   (format "min(~a, ~a)" i1 i2))
 
 (define (hld-max i1 i2 [i3 0])
-  (int-int-int-func max i1 i2))
+  (if USEINT
+      (int-int-int-func max i1 i2)
+      (int-int-int-func bvsmax i1 i2)))
 
 (define (hld-max->string i1 i2 [i3 ""])
   (format "max(~a, ~a)" i1 i2))
@@ -72,13 +154,15 @@
   (int-int-int-func euclidean-div i1 i2))
 
 ;;;;;;;; IMPORTANT ;;;;;;;
-;; this is not the correct semantics in Racket over concrete values
+;; this is not the correct semantics in Racket over concrete INTEGER values
 ;; but will produce queries using the SMTLIB2 div/mod operators
 ;; using my local patched version of Rosette ONLY
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (hld-div i1 i2 [i3 0])
-  (int-int-int-func quotient i1 i2))
+  (if USEINT
+      (int-int-int-func quotient i1 i2)
+      (int-int-int-func bv-euclidean-div i1 i2)))
 
 (define (hld-div->string i1 i2 [i3 ""])
   (format "(~a / ~a)" i1 i2))
@@ -87,7 +171,9 @@
   (int-int-int-func euclidean-mod i1 i2))
 
 (define (hld-mod i1 i2 [i3 0])
-  (int-int-int-func modulo i1 i2))
+  (if USEINT
+      (int-int-int-func modulo i1 i2)
+      (int-int-int-func bv-euclidean-mod i1 i2)))
 
 (define (hld-mod->string i1 i2 [i3 ""])
   (format "(~a % ~a)" i1 i2))
@@ -99,40 +185,54 @@
       error-register))
 
 (define (hld-lt i1 i2 [i3 0])
-  (int-int-bool-func < i1 i2))
+  (if USEINT
+      (int-int-bool-func < i1 i2)
+      (int-int-bool-func bvslt i1 i2)))
 
 (define (hld-lt->string i1 i2 [i3 ""])
   (format "(~a < ~a)" i1 i2))
 
 (define (hld-le i1 i2 [i3 0])
-  (int-int-bool-func <= i1 i2))
+  (if USEINT
+      (int-int-bool-func <= i1 i2)
+      (int-int-bool-func bvsle i1 i2)))
 
 (define (hld-le->string i1 i2 [i3 ""])
   (format "(~a <= ~a)" i1 i2))
 
 (define (hld-gt i1 i2 [i3 0])
-  (int-int-bool-func > i1 i2))
+  (if USEINT
+      (int-int-bool-func > i1 i2)
+      (int-int-bool-func bvsgt i1 i2)))
 
 (define (hld-gt->string i1 i2 [i3 ""])
   (format "(~a > ~a)" i1 i2))
 
 (define (hld-ge i1 i2 [i3 0])
-  (int-int-bool-func >= i1 i2))
+  (if USEINT
+      (int-int-bool-func >= i1 i2)
+      (int-int-bool-func bvsge i1 i2)))
 
 (define (hld-ge->string i1 i2 [i3 0])
   (format "(~a >= ~a)" i1 i2))
 
 (define (hld-eqi i1 i2 [i3 0])
-  (int-int-bool-func eq? i1 i2))
+  (if USEINT
+      (int-int-bool-func eq? i1 i2)
+      (int-int-bool-func bveq i1 i2)))
 
 (define (hld-eq->string i1 i2 [i3 ""])
   (format "(~a == ~a)" i1 i2))
 
 (define (hld-neqi i1 i2 [i3 0])
-  (int-int-bool-func (λ (x y) (not (eq? x y))) i1 i2))
+  (if USEINT
+      (int-int-bool-func (λ (x y) (not (eq? x y))) i1 i2)
+      (int-int-bool-func (λ (x y) (bvnot (bveq x y))) i1 i2)))
 
 (define (hld-neq->string i1 i2 [i3 ""])
   (format "(~a != ~a)" i1 i2))
+
+;; NB: select is same for both integers and bitvectors
 
 ;; bool -> int -> int -> int
 (define (hld-seli i1 i2 i3)
@@ -156,28 +256,38 @@
       error-register))
 
 (define (hld-and i1 i2 [i3 #f])
-  (bool-bool-bool-func (λ (x y) (and x y)) i1 i2))
+  (if USEINT
+  (bool-bool-bool-func (λ (x y) (and x y)) i1 i2)
+  (bool-bool-bool-func bvand i1 i2)))
 
 (define (hld-and->string i1 i2 [i3 ""])
   (format "(~a && ~a)" i1 i2))
 
 (define (hld-or i1 i2 [i3 #f])
-  (bool-bool-bool-func (λ (x y) (or x y)) i1 i2))
+  (if USEINT
+  (bool-bool-bool-func (λ (x y) (or x y)) i1 i2)
+  (bool-bool-bool-func bvor i1 i2)))
 
 (define (hld-or->string i1 i2 [i3 #f])
   (format "(~a || ~a)" i1 i2))
 
 (define (hld-eqb i1 i2 [i3 #f])
-  (bool-bool-bool-func eq? i1 i2))
+  (if USEINT
+  (bool-bool-bool-func eq? i1 i2)
+  (bool-bool-bool-func bveq i1 i2)))
 
 (define (hld-neqb i1 i2 [i3 #f])
-   (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2))
+  (if USEINT
+      (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2)
+      (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2)))
 
 ;; bool -> bool
 ;; only one of these
 (define (hld-not i1 [i2 #f] [i3 #f])
   (if (bool-register? i1)
-      (register 'bool (not (register-value i1)))
+      (if USEINT
+          (register 'bool (not (register-value i1)))
+          (register 'bool (bvnot (register-value i1))))
       error-register))
 
 (define (hld-not->string i1 [i2 ""] [i3 ""])

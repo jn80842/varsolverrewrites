@@ -6,7 +6,7 @@
 (require "../halide-parser.rkt")
 (require "../varsolver-synthesis.rkt")
 
-(define expr1 (halide->termIR "n0 + ((n1 * 0) + (t0 - n0))"))
+(define expr1 (halide->termIR "n0 + ((n1 * (n0 - n0)) + (t0 - n0))"))
 
 (check-true (verify-RHS-is-target-variable? expr1))
 
@@ -20,3 +20,8 @@
 
 (check-true (or (equal? topn-rule (make-rule expr3 (sigma-term '+ (list "t0" (sigma-term 'min (list "n0" "n1"))))))
                 (equal? topn-rule (make-rule expr3 (sigma-term '+ (list "t0" (sigma-term 'min (list "n1" "n0"))))))))
+
+(define expr4 (halide->termIR "(t0 + n1) - (t0 + n2)"))
+(define fewervars-rule (synthesize-fewer-target-variables-rule expr4))
+
+(check-equal? fewervars-rule (make-rule expr4 (halide->termIR "n1 - n2")))
