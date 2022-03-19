@@ -14,7 +14,8 @@
          synthesize-nonly-rewrite
          synth-nonly-over-insn-count-range
          synthesize-topn-rewrite
-         synth-topn-over-insn-count-range)
+         synth-topn-over-insn-count-range
+         verify-rule)
 
 (define USEINT #t)
 (define CURRENT-WIDTH 16)
@@ -266,6 +267,18 @@
           (unless (equal? normalized-patt (halide->termIR patt))
             (displayln (format "~a with target variable ~a normalized to ~a"
                                patt tvar (termIR->halide normalized-patt))))))))
+
+(define (verify-rule r)
+  (let* ([LHS-variables (termIR->variables (rule-lhs r))]
+         [sym-variables (map (λ (v) (get-sym-input-int)) LHS-variables)]
+         [bound (overflow-bounds CURRENT-WIDTH (max (term-op-count (rule-lhs r))
+                                                    (term-op-count (rule-rhs r))))])
+    (begin
+      (unless USEINT (for ([v sym-variables])
+                       (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                       (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
+      (verify (assert (equal? (apply (termIR->function (rule-lhs r) LHS-variables) sym-variables)
+                              (apply (termIR->function (rule-rhs r) LHS-variables) sym-variables)))))))
 
 #;(for ([lhs-pair patts])
   (find-rule (car lhs-pair)))
