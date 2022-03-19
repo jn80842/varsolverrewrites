@@ -59,10 +59,16 @@
                       [(string? tprime) tprime]
                       [(and (sigma-term? tprime)
                             (or (equal? (sigma-term-symbol tprime) 'max)
-                                (equal? (sigma-term-symbol tprime) 'min))) (format "~a(~a, ~a)"
+                                (equal? (sigma-term-symbol tprime) 'min)
+                                (equal? (sigma-term-symbol tprime) 'broadcast))) (format "~a(~a, ~a)"
                                                                                    (sigma-term-symbol tprime)
                                                                                    (f (list-ref (sigma-term-term-list tprime) 0))
                                                                                    (f (list-ref (sigma-term-term-list tprime) 1)))]
+                      [(and (sigma-term? tprime)
+                            (equal? (sigma-term-symbol tprime) 'ramp)) (format "ramp(~a, ~a, ~a)"
+                                                                               (f (list-ref (sigma-term-term-list tprime) 0))
+                                                                               (f (list-ref (sigma-term-term-list tprime) 1))
+                                                                               (f (list-ref (sigma-term-term-list tprime) 2)))]
                       [(and (sigma-term? tprime)
                             (equal? (sigma-term-symbol tprime) 'select)) (format "select(~a, ~a, ~a)"
                                                                                  (f (list-ref (sigma-term-term-list tprime) 0))
