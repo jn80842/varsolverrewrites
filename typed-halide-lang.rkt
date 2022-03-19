@@ -9,7 +9,7 @@
 ;;                                       ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define USEINT #f)
+(define USEINT #t)
 (define width 16)
 
 ;; all operators take registers as inputs
@@ -57,12 +57,15 @@
   (register 'int (get-sym-bv width)))
 
 (define (get-register val)
-  (let ([reg-type (if (or (integer? val) (bv? val))
-                      'int
-                      (if (boolean? val)
-                          'bool
-                          'error))])
-    (register reg-type val)))
+  (let* ([reg-type (if (or (integer? val) (bv? val))
+                       'int
+                       (if (boolean? val)
+                           'bool
+                           'error))]
+        [typed-val (cond [(and (equal? reg-type 'int) USEINT (bitvector? val)) (bitvector->integer val)]
+                         [(and (equal? reg-type 'int) (not USEINT) (integer? val)) (bv val width)]
+                         [else val])])
+    (register reg-type typed-val)))
 
 (define (get-dummy-register type)
   (if (equal? type 'int)
