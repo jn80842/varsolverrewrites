@@ -16,6 +16,7 @@
          synthesize-topn-rewrite
          synth-topn-over-insn-count-range)
 
+(define USEINT #t)
 (define CURRENT-WIDTH 16)
 
 (define (overflow-bounds width maxdepth)
@@ -52,11 +53,11 @@
                         (let* ([sk (get-symbolic-sketch operator-list (length LHS-variables) insn-count)]
                                [evaled-sketch (apply (get-sketch-function sk) sym-variables)]
                                [evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
-                               [bound (overflow-bounds CURRENT-WIDTH insn-count)]
+                               [bound (overflow-bounds CURRENT-WIDTH (max LHS-op-count insn-count))]
                                [model (begin
-                                        (for ([v sym-variables])
-                                          (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                          (assume (bvsge v (bv (- bound) CURRENT-WIDTH))))
+                                        (unless USEINT (for ([v sym-variables])
+                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
                                         (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                               [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                                 (synthesize #:forall sym-variables
@@ -99,9 +100,9 @@
                                [evaled-LHS (apply (termIR->function LHS LHS-variables)
                                                   (order-symbolic-arguments LHS-variables tarvars non-tarvars))]
                                [model (begin
-                                        (for ([v (append tarvars non-tarvars)])
-                                          (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                          (assume (bvsge v (bv (- bound) CURRENT-WIDTH))))
+                                        (unless USEINT (for ([v (append tarvars non-tarvars)])
+                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
                                         (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                             [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                               (synthesize #:forall (append tarvars non-tarvars)
@@ -142,9 +143,9 @@
                                     (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
                  [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
                  [model (begin
-                          (for ([v (cons tarvar non-tarvars)])
-                            (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                            (assume (bvsge v (bv (- bound) CURRENT-WIDTH))))
+                          (unless USEINT (for ([v (cons tarvar non-tarvars)])
+                                                 (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                 (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
                           (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                 [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                   (synthesize #:forall (cons tarvar non-tarvars)
@@ -170,29 +171,38 @@
 (define (verify-RHS-is-target-variable? LHS)
   (let* ([LHS-variables (termIR->variables LHS)]
          [target-variables (filter is-tvar-matching? LHS-variables)]
-         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)])
+         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
+         [bound (overflow-bounds CURRENT-WIDTH (term-op-count LHS))])
     (if (not (equal? (length target-variables) 1))
         #f
         (begin (clear-vc!)
-              ; (define-symbolic* tarvar integer?)
-               (let* ([tarvar (get-sym-input-int)]
+              (let* ([tarvar (get-sym-input-int)]
                       [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-input-int))]
                       [evaled-LHS (apply (termIR->function LHS LHS-variables)
                                          (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
-                      [cex (verify (assert (equal? evaled-LHS tarvar)))])
-                 (unsat? cex))))))
+                      [cex (begin
+                             (unless USEINT (for ([v (cons tarvar non-tarvars)])
+                                                    (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                    (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
+                             (verify (assert (equal? evaled-LHS tarvar))))])
+                (unsat? cex))))))
 
 (define (find-target-variable-RHS-rule LHS)
   (let* ([LHS-variables (termIR->variables LHS)]
          [variable-count (length LHS-variables)]
-         [sym-variables (map (λ (v) (get-sym-int)) LHS-variables)])
+         [sym-variables (map (λ (v) (get-sym-input-int)) LHS-variables)]
+         [bound (overflow-bounds CURRENT-WIDTH (term-op-count LHS))])
     (letrec ([f (λ (idx)
                   (cond [(>= idx variable-count) 'fail]
                         [(not (is-tvar-matching? (list-ref LHS-variables idx))) (f (add1 idx))]
                         [else (begin
                                 (clear-vc!)
                                 (let* ([evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
-                                       [cex (verify (assert (equal? evaled-LHS (list-ref sym-variables idx))))])
+                                       [cex (begin
+                                              (unless USEINT (for ([v sym-variables])
+                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
+                                              (verify (assert (equal? evaled-LHS (list-ref sym-variables idx)))))])
                                   (if (unsat? cex)
                                       (make-rule LHS (list-ref LHS-variables idx))
                                       (f (add1 idx)))))]))])

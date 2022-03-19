@@ -82,7 +82,7 @@
 
 (define (termIR->typecheck? term)
   (let ([vars (termIR->variables term)])
-   (not (equal? 'error (apply (termIR->function term vars) (range (length vars)))))))
+   (not (equal? 'error (apply (termIR->function term vars) (map (λ (v) (get-dummy-register 'int)) vars))))))
 
 (define (termIR->contains-div-mod? term)
   (letrec ([f (λ (t)

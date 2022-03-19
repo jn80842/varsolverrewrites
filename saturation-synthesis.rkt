@@ -202,9 +202,9 @@
           (list current-TRS current-blacklist))
         (letrec ([patternsλ (λ (patts TRS blacklist)
                              (cond [(empty? patts) (list TRS blacklist)]
-                                   [(termIR->contains-div-mod? (car patts)) (begin
-                                                                              (displayln (format "Pattern ~a contains div or mod so is being skipped" (termIR->halide (car patts))))
-                                                                              (patternsλ (cdr patts) TRS blacklist))]
+                               ;    [(termIR->contains-div-mod? (car patts)) (begin
+                               ;                                               (displayln (format "Pattern ~a contains div or mod so is being skipped" (termIR->halide (car patts))))
+                               ;                                               (patternsλ (cdr patts) TRS blacklist))]
                                    [(not (termIR->typecheck? (car patts))) (begin
                                                                              (displayln (format "Pattern ~a did not typecheck" (termIR->halide (car patts))))
                                                                              (patternsλ (cdr patts) TRS blacklist))]
@@ -296,3 +296,10 @@
 
 (define test-expr (halide->termIR "(max((((min((((x * c0) + y) - max(z, c1)), min((((x * c0) + y) + w), (((x * c0) + y) - max(z, c1)))) + c2) / c3) + ((((((min((y + w), (y - max(z, c1))) + c4) / c5) + ((u / c3) * c3)) - ((min((y + w), (y - max(z, c1))) + c6) / c5)) / c3) * c5)), (((min((((x * c0) + y) - max(z, c1)), min((((x * c0) + y) + w), (((x * c0) + y) - max(z, c1)))) + c7) / c3) + (((((((min((y + w), (y - max(z, c1))) + c4) / c3) + ((u / c3) * c5)) - ((min((y + w), (y - max(z, c1))) + c8) / c3)) + c9) / c3) * c3))) - ((min((((x * c0) + y) - max(z, c1)), min((((x * c0) + y) + w), (((x * c0) + y) - max(z, c1)))) + c8) / c3))"))
 (define test-expr2 (halide->termIR "(((((((((y * c0) - (((((y * c0) + z) + c1) / c2) * c2)) + (w + z)) + c1) / c2) - x) * c3) - u) + (((x * c3) + u) + ((v * c4) + v5)))"))
+
+
+(define input1 (sigma-term
+ '<=
+ (list
+  (sigma-term '+ (list (sigma-term '* '("x" "c0")) "c1"))
+  (sigma-term '/ (list (sigma-term 'min '("v1" "c2")) "c3")))))

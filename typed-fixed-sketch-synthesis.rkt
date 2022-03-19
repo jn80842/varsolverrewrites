@@ -9,6 +9,7 @@
 
 (provide (all-defined-out))
 
+(define USEINT #t)
 (define CURRENT-WIDTH 16)
 
 (define (overflow-bounds width maxdepth)
@@ -161,9 +162,9 @@
                                [evaled-LHS (apply (termIR->function LHS LHS-variable-instances) (interleave-arguments sym-tvars sym-nvars LHS-tvar-positions))]
                                [evaled-fixed-sketch (eval-fixed-sketch fsketch sym-tvars sym-nvars)]
                                [model (begin
-                                        (for ([v (append sym-tvars sym-nvars)])
-                                          (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                          (assume (bvsge v (bv (- bound) CURRENT-WIDTH))))
+                                        (unless USEINT (for ([v (append sym-tvars sym-nvars)])
+                                                         (assume (bvsle v (bv bound CURRENT-WIDTH)))
+                                                         (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
                                         (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                               [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                                 (synthesize #:forall (append sym-tvars sym-nvars)

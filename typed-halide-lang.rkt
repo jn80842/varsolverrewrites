@@ -64,6 +64,11 @@
                           'error))])
     (register reg-type val)))
 
+(define (get-dummy-register type)
+  (if (equal? type 'int)
+      (if USEINT 1 (bv 1 width))
+      #t))
+
 (define (bvpositive? x)
   (bvslt (bvsub x x) x))
 (define (bvnegative? x)
