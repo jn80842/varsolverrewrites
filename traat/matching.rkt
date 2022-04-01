@@ -125,7 +125,6 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; matching for variable solver
-;; assume all pattern variables are either target-variable matching or non-target-variable matching
 ;; tvar is the target variable that occurs in the obj/input expr
 (define (varsolver-match tvar patt obj)
   (letrec ([matches (λ (eq-set sub)
@@ -148,6 +147,10 @@
                                   (not (occurs tvar (cdr curr-eq)))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (term-variable? (car curr-eq))
                                   (not (indom (car curr-eq) sub))
+                                  (is-cvar-matching? (car curr-eq))
+                                  (term-constant? (cdr curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
+                            [(and (term-variable? (car curr-eq))
+                                  (not (indom (car curr-eq) sub))
                                   (is-general-matching? (car curr-eq))) (matches ret-eq-set (hash-set sub (car curr-eq) (cdr curr-eq)))]
                             [(and (sigma-term? (car curr-eq))
                                   (sigma-term? (cdr curr-eq))
@@ -158,7 +161,7 @@
     (matches (list (cons patt obj)) (make-immutable-hash '()))))
 
 ;; match variable solver style rules against each other
-;; target variables start with 't', non target variables with 'n', general with any other character
+;; target variables start with 't', non target variables with 'n', constant variables with 'c', general with any other character
 (define (varsolver-rules-match patt obj)
   (letrec ([matches (λ (eq-set sub)
                       (if (empty? eq-set) sub

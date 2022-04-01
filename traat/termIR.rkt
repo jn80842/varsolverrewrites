@@ -2,11 +2,14 @@
 
 (provide (struct-out sigma-term))
 (provide (struct-out rule))
+(provide (struct-out predicate-rule))
 (provide (struct-out eq-identity))
 (provide make-rule make-identity term-constant? term-variable? termIR->halide
-         termIR->variables termIR->variable-instances termIR->in-solved-form? termIR->renamevars
+         termIR->variables termIR->variable-instances
+         termIR->terminals termIR->terminal-instances
+         termIR->in-solved-form? termIR->renamevars
          rename-to-fresh-vars term-size term-op-count cap-and-sort-terms-by-size
-         contains-target-variable? is-tvar-matching?
+         contains-target-variable? is-tvar-matching? is-cvar-matching?
          is-non-tvar-matching? is-general-matching?
          rename-to-tarvar-aware-vars same-matching-type?
          rename-to-tarvar-aware-term-pairs
@@ -23,6 +26,9 @@
 
 ;; a rule has a lefthand side, a righthand side and a name
 (struct rule (lhs rhs name) #:transparent)
+
+;; subtype predicate rule also has a predicate that must hold to apply rule
+(struct predicate-rule rule (predicate))
 
 (define (make-rule lhs rhs)
   (rule lhs rhs ""))
@@ -102,6 +108,17 @@
                       [else '()]))])
     (flatten (f t))))
 
+(define (termIR->terminal-instances t)
+  (letrec ([f (λ (tprime)
+                (cond [(string? tprime) (list tprime)]
+                      [(term-constant? tprime) (list tprime)]
+                      [(sigma-term? tprime) (map f (sigma-term-term-list tprime))]
+                      [else '()]))])
+    (flatten (f t))))
+
+(define (termIR->terminals t)
+  (remove-duplicates (termIR->terminal-instances t)))
+
 (define (is-target-variable? v)
   (string-prefix? v "t"))
 
@@ -164,8 +181,12 @@
   (string-prefix? v "t"))
 (define (is-non-tvar-matching? v)
   (string-prefix? v "n"))
+(define (is-cvar-matching? v)
+  (string-prefix? v "c"))
 (define (is-general-matching? v)
-  (and (not (is-tvar-matching? v)) (not (is-non-tvar-matching? v))))
+  (and (not (is-tvar-matching? v))
+       (not (is-non-tvar-matching? v))
+       (not (is-cvar-matching? v))))
 
 (define (same-matching-type? t1 t2)
   (or (and (is-tvar-matching? t1) (is-tvar-matching? t2))
@@ -186,31 +207,36 @@
                       [else (andmap f (sigma-term-term-list tprime))]))])
     (f t)))
 
+(define can-match-cvar? term-constant?)
+
 (define (can-match-var-to-term? var t)
   (cond [(is-tvar-matching? var) (can-match-tvar? t)]
         [(is-non-tvar-matching? var) (can-match-non-tvar? t)]
+        [(is-cvar-matching? var) (can-match-cvar? t)]
         [else #t]))
 
 ;; assumes varsolver rules variable naming conventions
-(define (rename-to-tarvar-aware-vars term varmap [prefixes (list "tvar" "nvar" "v")])
+(define (rename-to-tarvar-aware-vars term varmap [prefixes (list "tvar" "nvar" "cvar" "v")])
   (letrec ([get-fresh-var (λ (var prefix)
                             (unless (hash-has-key? varmap var)
                                 (hash-set! varmap var (format "~a~a" prefix (hash-count varmap))))
                             (hash-ref varmap var))]
            [f (λ (tprime)
                 (cond [(and (term-variable? tprime)
-                            (is-tvar-matching? tprime)) (get-fresh-var tprime (list-ref prefixes 0))]
+                            (is-tvar-matching? tprime)) (get-fresh-var tprime (first prefixes))]
                       [(and (term-variable? tprime)
-                            (is-non-tvar-matching? tprime)) (get-fresh-var tprime (list-ref prefixes 1))]
+                            (is-non-tvar-matching? tprime)) (get-fresh-var tprime (second prefixes))]
                       [(and (term-variable? tprime)
-                            (is-general-matching? tprime) (get-fresh-var tprime (list-ref prefixes 2)))]
+                            (is-cvar-matching? tprime)) (get-fresh-var tprime (third prefixes))]
+                      [(and (term-variable? tprime)
+                            (is-general-matching? tprime) (get-fresh-var tprime (fourth prefixes)))]
                       [(term-constant? tprime) tprime]
                       [else (sigma-term (sigma-term-symbol tprime) (map f (sigma-term-term-list tprime)))]))])
     (cons varmap (f term))))
 
-(define (rename-to-tarvar-aware-term-pairs terms varmap [prefixes (list "tvar" "nvar" "v")])
-  (let* ([map-term-pair-a (rename-to-tarvar-aware-vars (car terms) varmap prefixes)]
-         [map-term-pair-b (rename-to-tarvar-aware-vars (cdr terms) (car map-term-pair-a) prefixes)])
+(define (rename-to-tarvar-aware-term-pairs terms varmap)
+  (let* ([map-term-pair-a (rename-to-tarvar-aware-vars (car terms) varmap)]
+         [map-term-pair-b (rename-to-tarvar-aware-vars (cdr terms) (car map-term-pair-a))])
     (cons (cdr map-term-pair-a) (cdr map-term-pair-b))))
 
 (define (term-size input-term)

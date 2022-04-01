@@ -9,11 +9,13 @@
 
 (define vs-patt1 (sigma-term '+ (list "t0" "n0")))
 (define vs-patt2 (sigma-term '* (list "n0" "n0")))
+(define vs-patt3 (sigma-term '+ (list "t0" "c0")))
 
 (define obj1 (sigma-term '+ (list (sigma-term '+ (list "a" "b")) "c")))
 (define obj2 (sigma-term '* (list (sigma-term '+ (list "a" "b")) "c")))
 (define obj3 (sigma-term '* (list (sigma-term '+ (list "a" "b")) (sigma-term '+ (list "a" "b")))))
 (define obj4 (sigma-term '% (list (sigma-term '+ (list "a" "b")) (sigma-term '+ (list "a" "b")))))
+(define objc1 (sigma-term '+ (list "a" 3)))
 
 (check-equal? (match patt1 obj1) (make-immutable-hash (list (cons "x" (sigma-term '+ (list "a" "b"))) (cons "y" "c"))))
 (check-equal? (match patt1 obj2) 'fail)
@@ -22,6 +24,8 @@
 
 (check-equal? (varsolver-match "a" vs-patt1 obj1) (make-immutable-hash (list (cons "t0" (sigma-term '+ (list "a" "b"))) (cons "n0" "c"))))
 (check-equal? (varsolver-match "c" vs-patt1 obj1) 'fail)
+(check-equal? (varsolver-match "a" vs-patt3 objc1) (make-immutable-hash (list (cons "t0" "a") (cons "c0" 3))))
+(check-equal? (varsolver-match "a" vs-patt3 obj1) 'fail)
 
 (define rule1-LHS (sigma-term '+ (list "x" "x")))
 (define rule1-RHS (sigma-term '* (list "x" 2)))
