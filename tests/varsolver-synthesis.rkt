@@ -15,6 +15,14 @@
 
 (check-equal? nonly-rule (make-rule expr2 (sigma-term '- (list "n0" "n1"))))
 
+(define expr2a (sigma-term '+ (list (sigma-term '+ (list (sigma-term '* (list "t0" 3))
+                                                         (sigma-term '* (list "t0" -3))))
+                                    (sigma-term '+ (list "n0" "n1")))))
+(define nonly2a-rule (synthesize-nonly-rewrite expr2a 2))
+
+(check-true (or (equal? nonly2a-rule (make-rule expr2a (halide->termIR "n1 + n0")))
+                 (equal? nonly2a-rule (make-rule expr2a (halide->termIR "n0 + n1")))))
+
 (define expr3 (halide->termIR "min(n0 + t0, n1 + t0)"))
 (define topn-rule (synthesize-topn-rewrite expr3 1))
 
@@ -25,3 +33,9 @@
 (define fewervars-rule (synthesize-fewer-target-variables-rule expr4))
 
 (check-equal? fewervars-rule (make-rule expr4 (halide->termIR "n1 - n2")))
+
+(define expr5 (halide->termIR "(t0 + n1) >= 0"))
+(define nonly-rule5 (synthesize-topn-rewrite expr5 1))
+
+(check-equal? nonly-rule5 (make-rule expr5 (halide->termIR "t0 >= (0 - n1)")))
+

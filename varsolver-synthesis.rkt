@@ -17,22 +17,6 @@
          synth-topn-over-insn-count-range
          verify-rule)
 
-(define USEINT #t)
-(define CURRENT-WIDTH 16)
-
-(define (overflow-bounds width maxdepth)
-  (floor (expt (expt 2 (sub1 width)) (/ 1 (expt 2 maxdepth)))))
-
-;; assume LHS is a function that takes the same inputs as the RHS sketch
-(define (synthesize-rewrite LHS sk inputs)
-  (let* ([evaled-sketch (apply (get-sketch-function sk) inputs)]
-         [evaled-LHS (apply LHS inputs)]
-         [model (time (synthesize #:forall (symbolics inputs)
-                                  #:guarantee (assert (equal? evaled-sketch evaled-LHS))))])
-    (if (unsat? model)
-        (displayln "Could not find an equivalent RHS")
-        (displayln (print-sketch (evaluate sk model))))))
-
 (define (pull-out-target-var var-list target-idx)
   (let ([size (length var-list)])
     (append (list (list-ref var-list target-idx)) (take var-list target-idx) (drop var-list (add1 target-idx)))))
@@ -44,38 +28,47 @@
 ;; if we find a solution but it doesn't reduce target variable count, we just move on
 (define (synthesize-fewer-target-variables-rule LHS)
   (let* ([LHS-op-count (term-op-count LHS)]
-         [LHS-variables (termIR->variables LHS)]
-         [sym-variables (map (λ (v) (get-sym-input-int)) LHS-variables)])
+         [LHS-terminals (termIR->terminals LHS)]
+         [constants (filter term-constant? LHS-terminals)]
+         [sym-variables (map (λ (n) (if (term-constant? n) n (get-sym-input-int))) LHS-terminals)])
     (letrec ([f (λ (insn-count)
                   (if (>= insn-count LHS-op-count)
                       'fail
                       (begin
                         (clear-vc!)
-                        (let* ([sk (get-symbolic-sketch operator-list (length LHS-variables) insn-count)]
+                        (let* ([sk (get-symbolic-sketch operator-list (length LHS-terminals) insn-count)]
                                [evaled-sketch (apply (get-sketch-function sk) sym-variables)]
-                               [evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
-                               [bound (overflow-bounds CURRENT-WIDTH (max LHS-op-count insn-count))]
-                               [model (begin
-                                        (unless USEINT (for ([v sym-variables])
-                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
-                                        (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
-                                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                                (synthesize #:forall sym-variables
-                                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS))))))])
+                               [evaled-LHS (apply (termIR->function LHS LHS-terminals) sym-variables)]
+                               [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (max LHS-op-count insn-count)) #f)]
+                               [model (if (and (not (current-bitwidth))
+                                                 (not (empty? constants))
+                                                 (or (> (apply max constants) bound)
+                                                     (< (apply min constants) (- bound))))
+                                            (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a) for insn count ~a" (termIR->halide LHS) bound (- bound) insn-count))
+                                            (begin
+                                              (unless (not (current-bitwidth))
+                                                (for ([v (filter symbolic? sym-variables)])
+                                                  (assume (bvsle v (bv bound (current-bitwidth))))
+                                                  (assume (bvsge v (bv (- bound) (current-bitwidth))))))
+                                              (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                                    [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                                (synthesize #:forall (filter symbolic? sym-variables)
+                                                            #:guarantee (assert (equal? evaled-sketch evaled-LHS)))))))])
                           (if (or (void? model)
                                   (unsat? model)
                                   (unknown? model))
                               (f (add1 insn-count))
-                              (let ([candidate-rule (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) LHS-variables)))])
+                              (let ([candidate-rule (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) LHS-terminals)))])
                                 (if (tvar-count-reduction-order? candidate-rule)
                                     candidate-rule
                                     (f (add1 insn-count)))))))))])
       (f 0))))
 
 (define (order-symbolic-arguments term-vars sym-tvars sym-nvars)
-  (let ([tvar-idxes (filter (λ (i) (is-tvar-matching? (list-ref term-vars i))) (range (length term-vars)))]
-        [nvar-idxes (filter (λ (i) (not (is-tvar-matching? (list-ref term-vars i)))) (range (length term-vars)))])
+  (let ([tvar-idxes (filter (λ (i) (let ([t (list-ref term-vars i)])
+                                     (and (term-variable? t) (is-tvar-matching? t)))) (range (length term-vars)))]
+        [nvar-idxes (filter (λ (i) (let ([t (list-ref term-vars i)])
+                                     (not (and (term-variable? t) (is-tvar-matching? t))))) (range (length term-vars)))])
     (map (λ (i) (if (member i tvar-idxes) (list-ref sym-tvars (index-of tvar-idxes i))
                     (list-ref sym-nvars (index-of nvar-idxes i)))) (range (length term-vars)))))
 
@@ -84,38 +77,45 @@
 (define (synthesize-topn-rewrite LHS insn-count)
   (begin
     (clear-vc!)
-  (let* ([LHS-variables (termIR->variables LHS)]
-         [target-variables (filter is-tvar-matching? LHS-variables)]
-         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
-         [sk (get-symbolic-sketch operator-list (length non-tvar-variables) insn-count)]
-         [bound (overflow-bounds CURRENT-WIDTH (add1 insn-count))])
-    (letrec ([f (λ (tvars-pos)
-                  (if (empty? tvars-pos)
-                      (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-                      (begin
-                        (clear-vc!)
-                        (define-symbolic* root-op integer?)
-                        (let* ([tarvars (for/list ([i (range (length target-variables))]) (get-sym-input-int))]
-                               [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-input-int))]
-                               [evaled-sketch (apply (get-topn-sketch-function sk root-op) (list-ref tarvars (car tvars-pos)) non-tarvars)]
-                               [evaled-LHS (apply (termIR->function LHS LHS-variables)
-                                                  (order-symbolic-arguments LHS-variables tarvars non-tarvars))]
-                               [model (begin
-                                        (unless USEINT (for ([v (append tarvars non-tarvars)])
-                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
-                                        (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
-                                                            [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                              (synthesize #:forall (append tarvars non-tarvars)
-                                                          #:guarantee (assert (equal? evaled-sketch evaled-LHS))))))])
-            (if (or (unsat? model) (unknown? model) (void? model))
-                  (begin
-                    (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-                    (f (cdr tvars-pos)))
-                  (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model)
-                                                                           (evaluate root-op model)
-                                                                           (list-ref target-variables (car tvars-pos)) non-tvar-variables))))))))])
-      (f (range (length target-variables)))))))
+  (let* ([LHS-terminals (termIR->terminals LHS)]
+         [target-variables (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) LHS-terminals)]
+         [non-tvar-terminals (filter (λ (t) (not (and (term-variable? t) (is-tvar-matching? t)))) LHS-terminals)]
+         [constants (filter term-constant? non-tvar-terminals)]
+         [sk (get-symbolic-sketch operator-list (length non-tvar-terminals) insn-count)]
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (add1 insn-count)) #f)])
+    (if (and (current-bitwidth)
+             (not (empty? constants))
+             (or (> (apply max constants) bound)
+                 (< (apply min constants) (- bound))))
+        (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a) for insn count ~a" (termIR->halide LHS) bound (- bound) insn-count))
+        (letrec ([f (λ (tvars-pos)
+                      (if (empty? tvars-pos)
+                          (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a for any target variable" (termIR->halide LHS) insn-count))
+                          (begin
+                            (clear-vc!)
+                            (define-symbolic* root-op integer?)
+                            (let* ([tarvars (for/list ([i (range (length target-variables))]) (get-sym-input-int))]
+                                   [non-tarvar-terminals (for/list ([n non-tvar-terminals]) (if (term-constant? n) n (get-sym-input-int)))]
+                                   [non-tarvars (filter symbolic? non-tarvar-terminals)]
+                                   [evaled-sketch (apply (get-topn-sketch-function sk root-op) (list-ref tarvars (car tvars-pos)) non-tarvar-terminals)]
+                                   [evaled-LHS (apply (termIR->function LHS LHS-terminals)
+                                                      (order-symbolic-arguments LHS-terminals tarvars non-tarvar-terminals))]
+                                   [model (begin
+                                            (unless (not (current-bitwidth)) (for ([v (append tarvars non-tarvars)])
+                                                             (assume (bvsle v (bv bound (current-bitwidth))))
+                                                             (assume (bvsge v (bv (- bound) (current-bitwidth))))))
+                                            (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                                  [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                                    (synthesize #:forall (append tarvars non-tarvars)
+                                                                #:guarantee (assert (equal? evaled-sketch evaled-LHS))))))])
+                              (if (or (unsat? model) (unknown? model) (void? model))
+                                  (begin
+                                    (displayln (format "Could not find t-op-n RHS for ~a with insn count ~a for tvar ~a" (termIR->halide LHS) insn-count (car tvars-pos)))
+                                    (f (cdr tvars-pos)))
+                                  (make-rule LHS (halide->termIR (topn-sketch->halide-expr (evaluate sk model)
+                                                                                           (evaluate root-op model)
+                                                                                           (list-ref target-variables (car tvars-pos)) non-tvar-terminals))))))))])
+          (f (range (length target-variables))))))))
 
 (define (synth-topn-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
@@ -129,24 +129,31 @@
 
 (define (synthesize-nonly-rewrite LHS insn-count)
   (begin (clear-vc!)
-  (let* ([LHS-variables (termIR->variables LHS)]
-         [target-variables (filter is-tvar-matching? LHS-variables)]
-         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
-         [sk (get-symbolic-sketch operator-list (length non-tvar-variables) insn-count)]
-         [bound (overflow-bounds CURRENT-WIDTH (add1 insn-count))])
+  (let* ([LHS-terminals (termIR->terminals LHS)]
+         [target-variables (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) LHS-terminals)]
+         [non-tvar-terminals (filter (λ (t) (not (and (term-variable? t) (is-tvar-matching? t)))) LHS-terminals)]
+         [constants (filter term-constant? non-tvar-terminals)]
+         [sk (get-symbolic-sketch operator-list (length non-tvar-terminals) insn-count)]
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (add1 insn-count)) #f)])
     (if (not (equal? (length target-variables) 1))
         (void)
+        (if (and (current-bitwidth)
+             (not (empty? constants))
+             (or (> (apply max constants) bound)
+                 (< (apply min constants) (- bound))))
+        (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a) for insn count ~a" (termIR->halide LHS) bound (- bound) insn-count))
         (begin
           (clear-vc!)
           (let* ([tarvar (get-sym-input-int)]
-                 [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-input-int))]
-                 [evaled-LHS (apply (termIR->function LHS LHS-variables)
-                                    (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
-                 [evaled-sketch (apply (get-sketch-function sk) non-tarvars)]
+                 [non-tarvar-terminals (for/list ([n non-tvar-terminals]) (if (term-constant? n) n (get-sym-input-int)))]
+                 [non-tarvars (filter symbolic? non-tarvar-terminals)]
+                 [evaled-LHS (apply (termIR->function LHS LHS-terminals)
+                                    (insert-target-var non-tarvar-terminals tarvar (index-of LHS-terminals (car target-variables))))]
+                 [evaled-sketch (apply (get-sketch-function sk) non-tarvar-terminals)]
                  [model (begin
-                          (unless USEINT (for ([v (cons tarvar non-tarvars)])
-                                                 (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                 (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
+                          (unless (not (current-bitwidth)) (for ([v (cons tarvar non-tarvars)])
+                                                 (assume (bvsle v (bv bound (current-bitwidth))))
+                                                 (assume (bvsge v (bv (- bound) (current-bitwidth))))))
                           (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
                                                 [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
                                   (synthesize #:forall (cons tarvar non-tarvars)
@@ -157,7 +164,7 @@
                 (displayln (format "Synthesis threw an error while finding n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
               (if (or (unsat? model) (unknown? model))
                   (displayln (format "Could not find n-only RHS for ~a with insn count ~a" (termIR->halide LHS) insn-count))
-                  (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-variables)))))))))))
+                  (make-rule LHS (halide->termIR (sketch->halide-expr (evaluate sk model) non-tvar-terminals))))))))))))
 
 (define (synth-nonly-over-insn-count-range LHS insn-count)
   (letrec ([f (λ (i)
@@ -173,41 +180,58 @@
   (let* ([LHS-variables (termIR->variables LHS)]
          [target-variables (filter is-tvar-matching? LHS-variables)]
          [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variables)]
-         [bound (overflow-bounds CURRENT-WIDTH (term-op-count LHS))])
+         [constants (filter term-constant? (termIR->terminals LHS))]
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (term-op-count LHS)) #f)])
     (if (not (equal? (length target-variables) 1))
         #f
-        (begin (clear-vc!)
-              (let* ([tarvar (get-sym-input-int)]
-                      [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-input-int))]
-                      [evaled-LHS (apply (termIR->function LHS LHS-variables)
-                                         (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
-                      [cex (begin
-                             (unless USEINT (for ([v (cons tarvar non-tarvars)])
-                                                    (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                    (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
-                             (verify (assert (equal? evaled-LHS tarvar))))])
-                (unsat? cex))))))
+        (if (not (equal? (length target-variables) 1))
+        (void)
+        (if (and (current-bitwidth)
+             (not (empty? constants))
+             (or (> (apply max constants) bound)
+                 (< (apply min constants) (- bound))))
+            (begin (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a)" (termIR->halide LHS) bound (- bound)))
+                   #f)
+            (begin (clear-vc!)
+                   (let* ([tarvar (get-sym-input-int)]
+                          [non-tarvars (for/list ([i (range (length non-tvar-variables))]) (get-sym-input-int))]
+                          [evaled-LHS (apply (termIR->function LHS LHS-variables)
+                                             (insert-target-var non-tarvars tarvar (index-of LHS-variables (car target-variables))))]
+                          [cex (begin
+                                 (unless (not (current-bitwidth)) (for ([v (cons tarvar non-tarvars)])
+                                                                    (assume (bvsle v (bv bound (current-bitwidth))))
+                                                                    (assume (bvsge v (bv (- bound) (current-bitwidth))))))
+                                 (verify (assert (equal? evaled-LHS tarvar))))])
+                (unsat? cex))))))))
 
 (define (find-target-variable-RHS-rule LHS)
   (let* ([LHS-variables (termIR->variables LHS)]
          [variable-count (length LHS-variables)]
+         [constants (filter term-constant? (termIR->terminals LHS))]
          [sym-variables (map (λ (v) (get-sym-input-int)) LHS-variables)]
-         [bound (overflow-bounds CURRENT-WIDTH (term-op-count LHS))])
-    (letrec ([f (λ (idx)
-                  (cond [(>= idx variable-count) 'fail]
-                        [(not (is-tvar-matching? (list-ref LHS-variables idx))) (f (add1 idx))]
-                        [else (begin
-                                (clear-vc!)
-                                (let* ([evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
-                                       [cex (begin
-                                              (unless USEINT (for ([v sym-variables])
-                                                               (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                               (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
-                                              (verify (assert (equal? evaled-LHS (list-ref sym-variables idx)))))])
-                                  (if (unsat? cex)
-                                      (make-rule LHS (list-ref LHS-variables idx))
-                                      (f (add1 idx)))))]))])
-      (f 0))))
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (term-op-count LHS)) #f)])
+    (if (and (current-bitwidth)
+             (not (empty? constants))
+             (or (> (apply max constants) bound)
+                 (< (apply min constants) (- bound))))
+            (begin (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a)" (termIR->halide LHS) bound (- bound)))
+                   'fail)
+            (letrec ([f (λ (idx)
+                          (cond [(>= idx variable-count) 'fail]
+                                [(not (is-tvar-matching? (list-ref LHS-variables idx))) (f (add1 idx))]
+                                [else (begin
+                                        (clear-vc!)
+                                        (let* ([evaled-LHS (apply (termIR->function LHS LHS-variables) sym-variables)]
+                                               [cex (begin
+                                                      (unless (not (current-bitwidth))
+                                                        (for ([v sym-variables])
+                                                          (assume (bvsle v (bv bound (current-bitwidth))))
+                                                          (assume (bvsge v (bv (- bound) (current-bitwidth))))))
+                                                      (verify (assert (equal? evaled-LHS (list-ref sym-variables idx)))))])
+                                          (if (unsat? cex)
+                                              (make-rule LHS (list-ref LHS-variables idx))
+                                              (f (add1 idx)))))]))])
+              (f 0)))))
 
 ;; assume input pattern is normalized and not in solved form
 (define (find-rule patt tvar)
@@ -271,58 +295,13 @@
 (define (verify-rule r)
   (let* ([LHS-variables (termIR->variables (rule-lhs r))]
          [sym-variables (map (λ (v) (get-sym-input-int)) LHS-variables)]
-         [bound (overflow-bounds CURRENT-WIDTH (max (term-op-count (rule-lhs r))
-                                                    (term-op-count (rule-rhs r))))])
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (max (term-op-count (rule-lhs r))
+                                                                                (term-op-count (rule-rhs r))))
+                    #f)])
     (begin
-      (unless USEINT (for ([v sym-variables])
-                       (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                       (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
+      (unless (not (current-bitwidth))
+        (for ([v sym-variables])
+                       (assume (bvsle v (bv bound (current-bitwidth))))
+                       (assume (bvsge v (bv (- bound) (current-bitwidth))))))
       (verify (assert (equal? (apply (termIR->function (rule-lhs r) LHS-variables) sym-variables)
                               (apply (termIR->function (rule-rhs r) LHS-variables) sym-variables)))))))
-
-#;(for ([lhs-pair patts])
-  (find-rule (car lhs-pair)))
-
-(define (rule-search filename initTRS)
-  (with-input-from-file filename
-                  (thunk
-                   (let ([patterns (for/list ([e (in-lines)]) e)])
-                      (find-rules patterns initTRS)))))
-
-#;(for ([r (rule-search "patterns/2varpatterns.txt" '())])
-  (displayln (rule->halide-string r)))
-
-(define 1var-rules
-  (list
-   (make-rule (halide->termIR "(t0 - t0)") 0) ;; not in original rules
-   (make-rule (halide->termIR "(t0 >= t0)") 'true) ;; not in original rules
-   (make-rule (halide->termIR "(t0 || t0)") "t0")
-   (make-rule (halide->termIR "max(t0, t0)") "t0")
-   (make-rule (halide->termIR "min(t0, t0)") "t0")))
-
-(define batch1-rules
-  (list
-   (make-rule (halide->termIR "!((t0 < n0))") (halide->termIR "(t0 >= n0)"))
-(make-rule (halide->termIR "!((t0 <= n0))") (halide->termIR "(t0 > n0)"))
-(make-rule (halide->termIR "!((t0 == n0))") (halide->termIR "(t0 != n0)"))
-(make-rule (halide->termIR "((t0 * n0) * n1)") (halide->termIR "(t0 * (n0 * n1))"))
-(make-rule (halide->termIR "((t0 + n0) - n0)") (halide->termIR "t0"))
-(make-rule (halide->termIR "max(t0, (t0 + n0))") (halide->termIR "(t0 + max(n0, (n0 - n0)))"))
-(make-rule (halide->termIR "min((t0 + n0), t0)") (halide->termIR "(t0 + min((n0 - n0), n0))"))
-(make-rule (halide->termIR "(t0 - (t0 + n0))") (halide->termIR "((n0 - n0) - n0)"))
-(make-rule (halide->termIR "(t0 - (n0 + t0))") (halide->termIR "((n0 - n0) - n0)"))
-(make-rule (halide->termIR "(t0 + (n0 - t0))") (halide->termIR "n0"))
-(make-rule (halide->termIR "((t0 + n0) - t0)") (halide->termIR "n0"))
-(make-rule (halide->termIR "((t0 - n0) + n0)") (halide->termIR "t0"))
-(make-rule (halide->termIR "((t0 + n0) + n1)") (halide->termIR "(t0 + (n1 + n0))"))
-(make-rule (halide->termIR "((t0 + n0) < n1)") (halide->termIR "(t0 < (n1 - n0))"))
-(make-rule (halide->termIR "((t0 - n0) + n1)") (halide->termIR "(t0 + (n1 - n0))"))
-(make-rule (halide->termIR "((t0 - n0) - n1)") (halide->termIR "(t0 - (n1 + n0))"))
-(make-rule (halide->termIR "(t0 <= (t0 + n0))") (halide->termIR "(n0 <= (n0 + n0))"))
-(make-rule (halide->termIR "((t0 + n0) <= n1)") (halide->termIR "(t0 <= (n1 - n0))"))
-(make-rule (halide->termIR "((t0 - n0) <= n1)") (halide->termIR "(t0 <= (n1 + n0))"))
-(make-rule (halide->termIR "((t0 + n0) >= n1)") (halide->termIR "(t0 >= (n1 - n0))"))
-(make-rule (halide->termIR "((t0 - n0) >= n1)") (halide->termIR "(t0 >= (n1 + n0))"))
-(make-rule (halide->termIR "((t0 * n0) + (t0 * n1))") (halide->termIR "(t0 * (n0 + n1))"))
-(make-rule (halide->termIR "((t0 || n0) || n1)") (halide->termIR "(t0 || (n1 || n0))"))
-))
