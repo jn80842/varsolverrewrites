@@ -8,12 +8,12 @@ For each expression in the set of input expressions, `saturation-synthesis` will
 
 We can use different strategies for synthesizing individual rules by passing different `synth-func` methods to `saturation-synthesis`. These methods encode a TRS specification, conceived of at a high level as a reduction order, or an order over terms, such that every rule in the desired TRS will rewrite an input to be strictly less in that order than its original form. These methods don't directly express that order; instead, they encode a series of strategies for breaking up the search space for finding valid rules w.r.t that order, providing more efficient synthesis. Two methods are implemented here:
  - `synthesize-rule`, which attempts to find RHS expressions that 
-  -- don't contain the target variable at all, 
-  -- consist *only* of the target variable, or 
-  -- are in the form `t * e` where `t` is the target variable, `*` is some operation, and `e` is an expression that does not contain the target variable.
+    -- don't contain the target variable at all, 
+    -- consist *only* of the target variable, or 
+    -- are in the form `t * e` where `t` is the target variable, `*` is some operation, and `e` is an expression that does not contain the target variable.
  - `synthesize-gradual-rule`, which searches for the above types of RHSs, but then also attempts to find 
-  -- a RHS with fewer instances of the target variable than the LHS, 
-  -- a RHS in which the target variable has moved left w.r.t its position in the LHS, and 
-  -- a RHS in which the target variable has moved up in the AST w.r.t its position in the LHS.
+    -- a RHS with fewer instances of the target variable than the LHS, 
+    -- a RHS in which the target variable has moved left w.r.t its position in the LHS, and 
+    -- a RHS in which the target variable has moved up in the AST w.r.t its position in the LHS.
 
 The synthesis calls themselves are implemented in `varsolver-synthesis.rkt` and `typed-fixed-synthesis-sketch.rkt`. The interpreter that encodes the semantics of the Halide expression language is implemented in `typed-halide-lang.rkt`.
