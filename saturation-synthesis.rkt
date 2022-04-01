@@ -22,10 +22,7 @@
 ;; find all patterns that can match the full input term
 ;; NB: we always replace the same expr with the same variable
 ;; so "((x*y) + (x*y))" will not produce the pattern "v0 + v1" even though it could match it
-(define (find-all-patterns term tvar max-size)
-  (find-all-patterns-list (filter (λ (t) (< (term-size t) max-size)) (find-all-subterms term)) tvar))
-
-(define (find-all-patterns-list term-list tvar)
+(define (find-all-patterns term tvar [max-size 100])
   (define t-counter 0)
   (define n-counter 0)
   (define expr-to-var (make-hash '()))
@@ -49,32 +46,10 @@
                         (sigma-term sym args1)
                         (let ([arg-versions (outer (car args2))])
                           (map (λ (a) (inner sym (append args1 (list a)) (cdr args2))) arg-versions))))])
-    (filter (λ (t) (not (term-variable? t))) (flatten (map outer term-list)))))
-
-(define (replace-bottommost-subterms-with-fresh-vars term tvar)
-  (define t-counter 0)
-  (define n-counter 0)
-  (define expr-to-var (make-hash '()))
-  (letrec ([get-fresh-var (λ (e v)
-                            (if (hash-has-key? expr-to-var e)
-                                (hash-ref expr-to-var e)
-                                (begin
-                                  (let ([fresh-var (if (contains-target-variable? e v)
-                                                       (begin (set! t-counter (add1 t-counter))
-                                                              (format "t~a" (sub1 t-counter)))
-                                                       (begin (set! n-counter (add1 n-counter))
-                                                              (format "n~a" (sub1 n-counter))))])
-                                  (hash-set! expr-to-var e fresh-var)
-                                  fresh-var))))]
-           [f (λ (t)
-                (cond [(term-variable? t) (get-fresh-var t tvar)]
-                      [(term-constant? t) (get-fresh-var t tvar)]
-                      [(andmap term-variable? (sigma-term-term-list t)) (get-fresh-var t tvar)]
-                      [else (sigma-term (sigma-term-symbol t) (map f (sigma-term-term-list t)))]))])
-    (f term)))
+    (filter (λ (t) (not (term-variable? t))) (outer term))))
 
 (define (find-all-patterns-to-match-term term tvar [max-size 15])
-  (filter (λ (t) (< (term-size t) max-size)) (remove-duplicates (find-all-patterns-list (list term) tvar))))
+  (filter (λ (t) (< (term-size t) max-size)) (remove-duplicates (find-all-patterns term tvar))))
 
 (define (find-all-subterms-bottom-up term tvar [max-size 15])
   (letrec ([f (λ (tprime)
@@ -91,11 +66,6 @@
                     '()
                     (cons tprime (flatten (map f (sigma-term-term-list tprime))))))])
     (f term)))
-
-(define (find-all-subterms-for-synthesis term tvar max-size)
-  (filter (λ (t) (not (termIR->in-solved-form? t tvar)))
-          (cap-and-sort-terms-by-size 100
-                                      (find-all-subterms (termIR->replace-constant-variables term)))))
 
 ;; fully solved form order
 ;; we look for
@@ -154,22 +124,12 @@
                           (synthesize-from-fixed-metasketches LHS))))))))))
 
 ;; pattern should use rule var naming conventions distinct from t0/n0/x scheme
-(define (synth-rule-from-LHS-pattern pattern TRS blacklist [synth-func synthesize-rule])
-  (let* ([normalized-patt (varsolver-rules-rewrite* TRS pattern)]
-         [LHS (cdr (rename-to-tarvar-aware-vars normalized-patt (make-hash '()) (list "t" "n" "v")))]
-         [LHS-variables (termIR->variables LHS)])
-    (let-values ([(target-variables ntvar-variables) (partition is-tvar-matching? LHS-variables)])
-      (displayln (format "CANDIDATE LHS ~a" (termIR->halide LHS)))
-      (cond [(termIR->rule-in-solved-form? LHS) (displayln (format "~a candidate LHS already in solved form"
-                                                                   (termIR->halide LHS)))
-                                                'pass]
-            [(member-mod-alpha-renaming? LHS blacklist) (begin
-                                                          (displayln (format "LHS ON BLACKLIST: ~a" (termIR->halide LHS)))
-                                                          'pass)]
-            [else (let ([output (synth-func LHS)])
-                    (if (equal? 'fail output)
-                        LHS
-                        output))]))))
+(define (synth-rule-from-LHS-pattern pattern [synth-func synthesize-rule])
+  (let* ([LHS (cdr (rename-to-tarvar-aware-vars pattern (make-hash '()) (list "t" "n" "v")))]
+         [output (synth-func LHS)])
+    (if (equal? 'fail output)
+        LHS
+        output)))
 
 (define (termIR->rule-style-varnames term [var-hash (make-hash '())])
   (cdr (rename-to-tarvar-aware-vars term var-hash (list "t" "n" "v"))))
@@ -184,9 +144,6 @@
   (filter (λ (t) (terms->varsolver-reduction-order? "x"
                                                          (varsolver-rewrite* "x" TRS2 t)
                                                          (varsolver-rewrite* "x" TRS1 t))) terms))
-
-(define (add-to-end l e)
-  (append l (list e)))
 
 (define (pattern->in-solved-form? patt)
   (let ([target-vars (filter is-tvar-matching? (termIR->variables patt))])
@@ -214,7 +171,7 @@
                                    [(member-mod-alpha-renaming? (car patts) blacklist) (begin
                                                                                          (displayln (format "Pattern ~a on blacklist" (termIR->halide (car patts))))
                                                                                          (patternsλ (cdr patts) TRS blacklist))]
-                                   [else (let ([synth-output (synth-rule-from-LHS-pattern (car patts) TRS blacklist synth-func)])
+                                   [else (let ([synth-output (synth-rule-from-LHS-pattern (car patts) synth-func)])
                                            (cond [(rule? synth-output) (begin
                                                                          (displayln (format "NEW RULE FOUND: ~a" (rule->halide-string synth-output)))
                                                                          (list (append TRS (list synth-output)) blacklist))]
@@ -242,7 +199,7 @@
                                         (subtermsλ (cdr subterms) new-TRS new-blacklist)))))])
           (subtermsλ (find-all-subterms-bottom-up normed-input "x" 100) current-TRS current-blacklist)))))
 
-(define (recursive-synthesis inputs input-TRS input-blacklist [synth-func synthesize-rule])
+(define (saturation-synthesis inputs input-TRS input-blacklist [synth-func synthesize-rule])
   (letrec ([f (λ (exprs TRS blacklist)
               (if (empty? exprs)
                   (list TRS blacklist)

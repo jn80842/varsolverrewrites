@@ -9,12 +9,6 @@
 
 (provide (all-defined-out))
 
-(define USEINT #t)
-(define CURRENT-WIDTH 16)
-
-(define (overflow-bounds width maxdepth)
-  (floor (expt (expt 2 (sub1 width)) (/ 1 (expt 2 maxdepth)))))
-
 (struct fixed-metasketch (sigma-term func op-count arg-count max-depth) #:transparent)
 ;; op-indexes: for each operator slot, index into the list of operators that will fill it
 ;; tvar and nvar indexes: lists of indexes into the argument list that are target or non-target
@@ -101,9 +95,9 @@
                     (list-ref nvars (index-of nvar-idxes i)))) (range (+ (length tvars) (length nvars))))))
 
 (define (fixed-sketch-obeys-order? LHS fmetasketch tvar-idxes)
-  (let* ([LHS-variable-instances (termIR->variable-instances LHS)]
-         [tvars (filter is-tvar-matching? LHS-variable-instances)]
-         [nvars (filter (λ (v) (not (is-tvar-matching? v))) LHS-variable-instances)])
+  (let* ([LHS-terminal-instances (termIR->terminal-instances LHS)]
+         [tvars (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) LHS-terminal-instances)]
+         [nvars (filter (λ (t) (not (and (term-variable? t) (is-tvar-matching? t)))) LHS-terminal-instances)])
   (varsolver-reduction-order? (make-rule LHS
                                          (apply (fixed-metasketch-sigma-term fmetasketch)
                                                 (append (map (λ (l) '+) (range (fixed-metasketch-op-count fmetasketch)))
@@ -145,38 +139,48 @@
     (filter (λ (tvar-idxes) (fixed-sketch-obeys-order? LHS fmetasketch tvar-idxes)) tvar-lists)))
 
 (define (synthesize-from-fixed-metasketch LHS fmetasketch)
-  (let* ([LHS-variable-instances (termIR->variable-instances LHS)]
-         [LHS-tvar-positions (filter (λ (i) (is-tvar-matching? (list-ref LHS-variable-instances i))) (range (length LHS-variable-instances)))]
-         [target-variables (filter is-tvar-matching? LHS-variable-instances)]
-         [non-tvar-variables (filter (λ (v) (not (is-tvar-matching? v))) LHS-variable-instances)]
-         [valid-target-positions (sort-target-positions fmetasketch target-variables non-tvar-variables (find-valid-tvar-positions LHS (length target-variables) fmetasketch))]
-         [bound (overflow-bounds CURRENT-WIDTH (fixed-metasketch-max-depth fmetasketch))])
-    (letrec ([f (λ (positions)
-                  (begin
-                    (clear-vc!)
-                    (if (empty? positions)
-                        (begin (displayln "No rule found for fixed sketch") 'fail)
-                        (let* ([sym-tvars (map (λ (e) (get-sym-input-int)) target-variables)]
-                               [sym-nvars (map (λ (e) (get-sym-input-int)) non-tvar-variables)]
-                               [fsketch (fixed-sketch fmetasketch operator-list (map (λ (e) (get-sym-int)) (range (fixed-metasketch-op-count fmetasketch))) (car positions))]
-                               [evaled-LHS (apply (termIR->function LHS LHS-variable-instances) (interleave-arguments sym-tvars sym-nvars LHS-tvar-positions))]
-                               [evaled-fixed-sketch (eval-fixed-sketch fsketch sym-tvars sym-nvars)]
-                               [model (begin
-                                        (unless USEINT (for ([v (append sym-tvars sym-nvars)])
-                                                         (assume (bvsle v (bv bound CURRENT-WIDTH)))
-                                                         (assume (bvsge v (bv (- bound) CURRENT-WIDTH)))))
-                                        (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
-                                                              [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
-                                                (synthesize #:forall (append sym-tvars sym-nvars)
-                                                            #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS))))))]) 
-                          (if (or (void? model) (unsat? model) (unknown? model))
-                              (begin
+  (let* ([LHS-terminal-instances (termIR->terminal-instances LHS)]
+         [LHS-tvar-positions (filter (λ (i) (let ([t (list-ref LHS-terminal-instances i)])
+                                                   (and (term-variable? t) (is-tvar-matching? t)))) (range (length LHS-terminal-instances)))]
+         [target-variables (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) LHS-terminal-instances)]
+         [non-tvar-terminals (filter (λ (t) (not (and (term-variable? t) (is-tvar-matching? t)))) LHS-terminal-instances)]
+         [constants (filter term-constant? non-tvar-terminals)]
+         [valid-target-positions (sort-target-positions fmetasketch target-variables non-tvar-terminals (find-valid-tvar-positions LHS (length target-variables) fmetasketch))]
+         [bound (if (current-bitwidth) (overflow-bounds (current-bitwidth) (fixed-metasketch-max-depth fmetasketch)) #f)])
+    (if (and (current-bitwidth)
+             (not (empty? constants))
+             (or (> (apply max constants) bound)
+                 (< (apply min constants) (- bound))))
+        (begin
+          (displayln (format "Constants in LHS ~a lie outside bounds (~a, ~a) for this metasketch" (termIR->halide LHS) bound (- bound)))
+          'fail)
+        (letrec ([f (λ (positions)
+                      (begin
+                        (clear-vc!)
+                        (if (empty? positions)
+                            (begin (displayln "No rule found for fixed sketch") 'fail)
+                            (let* ([sym-tvars (map (λ (e) (get-sym-input-int)) target-variables)]
+                                   [sym-nvars (map (λ (n) (if (term-constant? n) n (get-sym-input-int))) non-tvar-terminals)]
+                                   [fsketch (fixed-sketch fmetasketch operator-list (map (λ (e) (get-sym-int)) (range (fixed-metasketch-op-count fmetasketch))) (car positions))]
+                                   [evaled-LHS (apply (termIR->function LHS LHS-terminal-instances) (interleave-arguments sym-tvars sym-nvars LHS-tvar-positions))]
+                                   [evaled-fixed-sketch (eval-fixed-sketch fsketch sym-tvars sym-nvars)]
+                                   [model (begin
+                                            (unless (not (current-bitwidth))
+                                              (for ([v (append sym-tvars (filter symbolic? sym-nvars))])
+                                                             (assume (bvsle v (bv bound (current-bitwidth))))
+                                                             (assume (bvsge v (bv (- bound) (current-bitwidth))))))
+                                            (time (with-handlers ([exn:fail:contract? (λ (e) (displayln (format "Function contract error ~a" (exn-message e))))]
+                                                                  [exn:fail? (λ (e) (displayln (format "Synthesis error ~a" (exn-message e))))])
+                                                    (synthesize #:forall (append sym-tvars (filter symbolic? sym-nvars))
+                                                                #:guarantee (assert (equal? evaled-fixed-sketch evaled-LHS))))))]) 
+                              (if (or (void? model) (unsat? model) (unknown? model))
+                                  (begin
                                 (displayln (format "Could not find solution for position ~a" (car positions)))
                                 (f (cdr positions)))
-                              (fixed-sketch->termIR (evaluate fsketch model) target-variables non-tvar-variables))))))])
-      (if (> (length target-variables) 3)
-          (begin (displayln "Fixed sketches not implemented for patterns with >1 target variables") 'fail)
-          (f valid-target-positions)))))
+                                  (fixed-sketch->termIR (evaluate fsketch model) target-variables non-tvar-terminals))))))])
+          (if (> (length target-variables) 3)
+              (begin (displayln "Fixed sketches not implemented for patterns with >1 target variables") 'fail)
+              (f valid-target-positions))))))
 
 (define (synthesize-from-fixed-metasketches LHS)
   (letrec ([f (λ (metasketches)
@@ -187,11 +191,11 @@
                       (if (equal? synthesis-output 'fail)
                           (f (cdr metasketches))
                           (make-rule LHS synthesis-output)))))])
-    (let ([tvar-instance-count (length (filter is-tvar-matching? (termIR->variable-instances LHS)))])
+    (let ([tvar-instance-count (length (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) (termIR->terminal-instances LHS)))])
     (if (> tvar-instance-count 3)
         (displayln "Fixed sketches not implemented for patterns with >3 target variables")
-        (f (filter (λ (m) (and (equal? (length (termIR->variable-instances LHS)) (fixed-metasketch-arg-count m))
-                               (< (length (filter is-tvar-matching? (termIR->variable-instances LHS)))
+        (f (filter (λ (m) (and (equal? (length (termIR->terminal-instances LHS)) (fixed-metasketch-arg-count m))
+                               (< (length (filter (λ (t) (and (term-variable? t) (is-tvar-matching? t))) (termIR->terminal-instances LHS)))
                                   (fixed-metasketch-arg-count m)))) all-fixed-metasketches))))))
 
 

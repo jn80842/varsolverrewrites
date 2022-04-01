@@ -5,7 +5,7 @@
 (require "../typed-fixed-sketch-synthesis.rkt")
 (require rackunit)
 
-;(interleave-arguments tvars nvars tvar-idxes)
+(current-bitwidth #f)
 
 (check-equal? (interleave-arguments '(a b c) '(y z) '(0 2 3))
               '(a y b c z))
@@ -26,7 +26,7 @@
                                     (list "t0") (list "n0" "n1"))
               (sigma-term '+ (list "n0" (sigma-term '* (list "t0" "n1")))))
 
-#;(check-equal? (eval-fixed-sketch (fixed-sketch 2op-patt1-metasketch
+(check-equal? (eval-fixed-sketch (fixed-sketch 2op-patt1-metasketch
                                                operator-list
                                                '(0 2) '(1))
                                  (list 10) (list 3 2))
@@ -42,3 +42,7 @@
 (check-equal? (synthesize-from-fixed-metasketch (sigma-term '+ (list (sigma-term '- (list "n0" (sigma-term '- (list "t1" "n2")))) "t3"))
                                                 3op-patt1-metasketch)
               (sigma-term '+ (list (sigma-term '- (list "n0" "t1")) (sigma-term '+ (list "t3" "n2")))))
+
+(check-equal? (synthesize-from-fixed-metasketches (sigma-term '- (list (sigma-term '+ (list "n0" 3)) "t0")))
+              (make-rule (sigma-term '- (list (sigma-term '+ (list "n0" 3)) "t0"))
+                         (sigma-term '- (list "n0" (sigma-term '- (list "t0" 3))))))
