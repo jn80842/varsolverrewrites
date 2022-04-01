@@ -13,7 +13,8 @@
          get-topn-sketch-function
          termIR->function
          termIR->typecheck?
-         termIR->contains-div-mod?)
+         termIR->contains-div-mod?
+         overflow-bounds)
 
 (struct insn (op-idx arg1-idx arg2-idx arg3-idx) #:transparent)
 
@@ -91,3 +92,6 @@
                                                 (equal? (sigma-term-symbol t) '%))) #t]
                       [else (ormap identity (map f (sigma-term-term-list t)))]))])
     (or (f term))))
+
+(define (overflow-bounds width maxdepth)
+  (floor (expt (expt 2 (sub1 width)) (/ 1 (expt 2 maxdepth)))))

@@ -2,16 +2,6 @@
 
 (provide (all-defined-out))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;                                       ;;
-;;  SET FLAG FOR INT/BITVECTOR HERE      ;;
-;;                                       ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(define USEINT #t)
-(define width 16)
-
 ;; all operators take registers as inputs
 ;; type can be 'int 'bool or 'error
 ;; value can be a variable, a constant, or another register expression
@@ -32,10 +22,10 @@
 
 ;; (define get-sym-input-int get-sym-int)
 (define (get-sym-input-int)
-  (if USEINT
+  (if (not (current-bitwidth))
       (get-sym-int)
       (begin
-        (define-symbolic* x (bitvector width))
+        (define-symbolic* x (bitvector (current-bitwidth)))
         x)))
 
 (define (get-sym-int-register)
@@ -49,12 +39,12 @@
   (register 'bool (get-sym-bool)))
 
 (define (get-sym-bv)
-  (define-symbolic* bv (bitvector width))
+  (define-symbolic* bv (bitvector (current-bitwidth)))
   bv)
 
 ;; note: we never mix integers and bitvectors
 (define (get-sym-bv-register)
-  (register 'int (get-sym-bv width)))
+  (register 'int (get-sym-bv (current-bitwidth))))
 
 (define (get-register val)
   (let* ([reg-type (if (or (integer? val) (bv? val))
@@ -62,14 +52,14 @@
                        (if (boolean? val)
                            'bool
                            'error))]
-        [typed-val (cond [(and (equal? reg-type 'int) USEINT (bitvector? val)) (bitvector->integer val)]
-                         [(and (equal? reg-type 'int) (not USEINT) (integer? val)) (bv val width)]
+        [typed-val (cond [(and (equal? reg-type 'int) (not (current-bitwidth)) (bitvector? val)) (bitvector->integer val)]
+                         [(and (equal? reg-type 'int) (current-bitwidth) (integer? val)) (bv val (current-bitwidth))]
                          [else val])])
     (register reg-type typed-val)))
 
 (define (get-dummy-register type)
   (if (equal? type 'int)
-      (if USEINT 1 (bv 1 width))
+      (if (not (current-bitwidth)) 1 (bv 1 (current-bitwidth)))
       #t))
 
 (define (bvpositive? x)
@@ -119,7 +109,7 @@
       error-register))
 
 (define (hld-add i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func + i1 i2)
       (int-int-int-func bvadd i1 i2)))
 
@@ -127,7 +117,7 @@
   (format "(~a + ~a)" i1 i2))
 
 (define (hld-sub i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func - i1 i2)
       (int-int-int-func bvsub i1 i2)))
 
@@ -135,7 +125,7 @@
   (format "(~a - ~a)" i1 i2))
 
 (define (hld-mul i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func * i1 i2)
       (int-int-int-func bvmul i1 i2)))
 
@@ -143,7 +133,7 @@
   (format "(~a * ~a)" i1 i2))
 
 (define (hld-min i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func min i1 i2)
       (int-int-int-func bvsmin i1 i2)))
 
@@ -151,7 +141,7 @@
   (format "min(~a, ~a)" i1 i2))
 
 (define (hld-max i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func max i1 i2)
       (int-int-int-func bvsmax i1 i2)))
 
@@ -168,7 +158,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (hld-div i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func quotient i1 i2)
       (int-int-int-func bv-euclidean-div i1 i2)))
 
@@ -179,7 +169,7 @@
   (int-int-int-func euclidean-mod i1 i2))
 
 (define (hld-mod i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-int-func modulo i1 i2)
       (int-int-int-func bv-euclidean-mod i1 i2)))
 
@@ -193,7 +183,7 @@
       error-register))
 
 (define (hld-lt i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func < i1 i2)
       (int-int-bool-func bvslt i1 i2)))
 
@@ -201,7 +191,7 @@
   (format "(~a < ~a)" i1 i2))
 
 (define (hld-le i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func <= i1 i2)
       (int-int-bool-func bvsle i1 i2)))
 
@@ -209,7 +199,7 @@
   (format "(~a <= ~a)" i1 i2))
 
 (define (hld-gt i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func > i1 i2)
       (int-int-bool-func bvsgt i1 i2)))
 
@@ -217,7 +207,7 @@
   (format "(~a > ~a)" i1 i2))
 
 (define (hld-ge i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func >= i1 i2)
       (int-int-bool-func bvsge i1 i2)))
 
@@ -225,7 +215,7 @@
   (format "(~a >= ~a)" i1 i2))
 
 (define (hld-eqi i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func eq? i1 i2)
       (int-int-bool-func bveq i1 i2)))
 
@@ -233,7 +223,7 @@
   (format "(~a == ~a)" i1 i2))
 
 (define (hld-neqi i1 i2 [i3 0])
-  (if USEINT
+  (if (not (current-bitwidth))
       (int-int-bool-func (λ (x y) (not (eq? x y))) i1 i2)
       (int-int-bool-func (λ (x y) (bvnot (bveq x y))) i1 i2)))
 
@@ -264,7 +254,7 @@
       error-register))
 
 (define (hld-and i1 i2 [i3 #f])
-  (if USEINT
+  (if (not (current-bitwidth))
   (bool-bool-bool-func (λ (x y) (and x y)) i1 i2)
   (bool-bool-bool-func bvand i1 i2)))
 
@@ -272,7 +262,7 @@
   (format "(~a && ~a)" i1 i2))
 
 (define (hld-or i1 i2 [i3 #f])
-  (if USEINT
+  (if (not (current-bitwidth))
   (bool-bool-bool-func (λ (x y) (or x y)) i1 i2)
   (bool-bool-bool-func bvor i1 i2)))
 
@@ -280,12 +270,12 @@
   (format "(~a || ~a)" i1 i2))
 
 (define (hld-eqb i1 i2 [i3 #f])
-  (if USEINT
+  (if (not (current-bitwidth))
   (bool-bool-bool-func eq? i1 i2)
   (bool-bool-bool-func bveq i1 i2)))
 
 (define (hld-neqb i1 i2 [i3 #f])
-  (if USEINT
+  (if (not (current-bitwidth))
       (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2)
       (bool-bool-bool-func (λ (x y) (not (eq? x y))) i1 i2)))
 
@@ -293,7 +283,7 @@
 ;; only one of these
 (define (hld-not i1 [i2 #f] [i3 #f])
   (if (bool-register? i1)
-      (if USEINT
+      (if (not (current-bitwidth))
           (register 'bool (not (register-value i1)))
           (register 'bool (bvnot (register-value i1))))
       error-register))
