@@ -1,4 +1,4 @@
-The main synthesis procedure is called `saturation-synthesis` and lives in `saturation-synthesis.rkt`.
+The main synthesis procedure is called `saturation-synthesis` and lives in `saturation-synthesis.rkt`. Synthesis is implemented in the [Rosette language](https://emina.github.io/rosette/) and calls the SMT solver Z3.
 
 Here we are attempting to synthesize a term rewriting system to replace a component within the Halide compiler called the variable solver, which attempts to 'solve' an expression for a specified variable (the target variable) by isolating it to the left as much as possible. 
 
